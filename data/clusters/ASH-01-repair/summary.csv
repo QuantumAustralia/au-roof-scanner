@@ -1,0 +1,3 @@
+cluster,work,order,lead_id,street_address,suburb,postcode,lat,lon,metres_from_previous
+ASH-01-repair,repair,1,ASH-0001,76 Currumburra Road,Ashmore,4214,-27.991880,153.381980,
+ASH-01-repair,repair,2,ASH-0003,80 Currumburra Road,Ashmore,4214,-27.991470,153.381900,46

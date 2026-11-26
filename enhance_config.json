@@ -1,0 +1,10 @@
+{
+  "sharpen_percent": 90,
+  "sharpen_radius": 1.2,
+  "sharpen_threshold": 3,
+  "contrast": 1.08,
+  "clarity_percent": 40,
+  "clarity_radius": 2.5,
+  "clarity_threshold": 2,
+  "upscale_factor": 2
+}

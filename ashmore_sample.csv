@@ -1,0 +1,6 @@
+lead_id,street_address,suburb,state,postcode,lat,lon,roof_area_m2,roof_centroid_lat,roof_centroid_lon
+ASH-0001,76 Currumburra Road,Ashmore,QLD,4214,-27.99188,153.38198,196,,
+ASH-0002,78 Currumburra Road,Ashmore,QLD,4214,-27.99170,153.38192,214,,
+ASH-0003,80 Currumburra Road,Ashmore,QLD,4214,-27.99147,153.38190,188,,
+ASH-0004,82 Currumburra Road,Ashmore,QLD,4214,-27.99125,153.38180,236,,
+ASH-0005,84 Currumburra Road,Ashmore,QLD,4214,-27.99105,153.38173,205,,

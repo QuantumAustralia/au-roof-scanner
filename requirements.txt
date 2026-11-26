@@ -1,0 +1,13 @@
+Flask>=3.0.0
+google-genai>=1.33.0
+httpx>=0.27.0
+opencv-python>=4.10.0
+Pillow>=10.4.0
+pydantic>=2.7.0
+python-dotenv>=1.0.1
+realesrgan>=0.3.0
+supabase>=2.10.0
+torch>=2.0
+torchvision>=0.17.0
+# basicsr 1.4.2 is required by realesrgan. Its setup.py fails on Python 3.15
+# until get_version() is patched; this environment has that patched install.

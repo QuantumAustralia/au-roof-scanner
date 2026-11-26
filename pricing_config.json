@@ -1,0 +1,17 @@
+{
+  "rates_aud_per_m2": {
+    "concrete_tile": 85,
+    "terracotta_tile": 95,
+    "metal": 70,
+    "colorbond_metal": 70,
+    "corrugated_iron": 65,
+    "other": 80
+  },
+  "base_callout": 500,
+  "minimum_repair": 500,
+  "repair_fraction_by_wear": {
+    "3": 0.10,
+    "4": 0.18,
+    "5": 0.30
+  }
+}

@@ -1,0 +1,4 @@
+cluster,work,order,lead_id,street_address,suburb,postcode,lat,lon,metres_from_previous
+BRO-01-repair,repair,1,GAQLD155068919,11 Jubilee Avenue,Broadbeach,4218,-28.026230,153.430587,
+BRO-01-repair,repair,2,GAQLD156315143,10 Australia Avenue,Broadbeach,4218,-28.024699,153.432506,254
+BRO-01-repair,repair,3,GAQLD156323769,11 Britannia Avenue,Broadbeach,4218,-28.023452,153.432403,139

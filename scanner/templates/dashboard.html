@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AU Roof Scanner</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c2430;
+      --muted: #5c6b7a;
+      --line: #e3e8ee;
+      --paper: #ffffff;
+      --page: #f3f5f8;
+      --blue: #1f4e79;
+      --blue-dark: #163a5c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--page);
+    }
+    main { width: 100%; margin: 0 auto; padding: 28px 20px 96px; }
+    h1 { margin: 0 0 4px; font-size: 28px; font-weight: 650; }
+    .lede { margin: 0 0 20px; color: var(--muted); }
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    form.scan { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    input[type="text"], input[type="number"], input[type="email"], select {
+      font: inherit;
+      padding: 8px 10px;
+      border: 1px solid #c5ced6;
+      border-radius: 6px;
+      background: white;
+    }
+    input[type="text"], input[type="number"] { width: 140px; }
+    input[type="email"] { width: 240px; }
+    .check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink); }
+    .toolbar { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; margin-bottom: 12px; }
+    #material-filter, #match-mode { width: 180px; }
+    .lead-count {
+      margin: 0;
+      align-self: center;
+      font-size: 16px;
+      font-weight: 650;
+      color: var(--ink);
+    }
+    button, .linkish {
+      font: inherit;
+      background: var(--blue);
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    button.secondary, .linkish { background: #e8eef4; color: var(--ink); }
+    #show-all[aria-pressed="true"] { background: var(--blue); color: white; }
+    button:hover, .linkish:hover { background: var(--blue-dark); color: white; }
+    .note { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .flash { list-style: none; padding: 0; margin: 0 0 16px; }
+    .flash li {
+      background: #e7f0f8;
+      border: 1px solid #c5d7e8;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--blue);
+      color: white;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin: 0 0 16px;
+      font-size: 18px;
+      font-weight: 650;
+    }
+    .banner[hidden] { display: none; }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(255, 255, 255, 0.35);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    button:disabled, input:disabled { opacity: 0.55; cursor: not-allowed; }
+    .wrap {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      max-width: 100%;
+      max-height: calc(100vh - 88px);
+      overflow: auto;
+    }
+    table {
+      width: 100%;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--paper);
+      font-size: 12.5px;
+    }
+    col.c-select { width: 2.2%; }
+    col.c-send { width: 2.2%; }
+    col.c-image { width: 3.4%; }
+    col.c-ref { width: 4.3%; }
+    col.c-address { width: 7.4%; }
+    col.c-material { width: 3.5%; }
+    col.c-wear { width: 2.6%; }
+    col.c-repair { width: 2.6%; }
+    col.c-clean { width: 2.8%; }
+    col.c-clean-defect { width: 4.2%; }
+    col.c-override { width: 3.5%; }
+    col.c-quote { width: 3.8%; }
+    col.c-highres { width: 3.1%; }
+    col.c-owner { width: 3.2%; }
+    col.c-status { width: 3.4%; }
+    col.c-sale { width: 4.2%; }
+    col.c-contractor { width: 6%; }
+    col.c-offered { width: 7.3%; }
+    col.c-invoice { width: 6.2%; }
+    col.c-outcome { width: 5.7%; }
+    col.c-notes { width: 3.6%; }
+    col.c-export { width: 4%; }
+    col.c-actions { width: 7%; }
+    th, td {
+      padding: 4px 5px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: var(--paper);
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 650;
+      box-shadow: inset 0 -1px 0 var(--line);
+    }
+    button.sort {
+      background: transparent;
+      color: var(--muted);
+      padding: 0;
+      font-weight: 650;
+      font-size: 12px;
+    }
+    button.sort:hover { background: transparent; color: var(--blue); }
+    td.address { min-width: 0; }
+    /* Contain the roof inside the cell. Cover was cropping and stretching the thumbnail. */
+    img.thumb { width: 100%; max-width: 64px; height: 40px; object-fit: contain; border-radius: 6px; display: block; background: #e8eef4; }
+    .empty-thumb { width: 100%; max-width: 64px; height: 40px; border-radius: 6px; background: #e8eef4; color: var(--muted); font-size: 11px; display: flex; align-items: center; justify-content: center; }
+    .wrap input[type="text"], .wrap input[type="number"], .wrap input[type="date"], .wrap select {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      font-size: 12px;
+      padding: 3px 4px;
+    }
+    td form { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 0; }
+    .actions { display: flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
+    .actions button { padding: 4px 6px; font-size: 12px; }
+    .actions form { display: flex; gap: 6px; align-items: center; margin: 0; }
+    .wrap .actions button, .wrap button.view {
+      white-space: nowrap;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .tag { font-size: 13px; }
+    tr.dirty td { background: #fff6d8; }
+    tr.sale-reserved td { background: #d9e4f2; }
+    tr.sale-sold td { background: #e3e6ea; color: #4e5964; }
+    tr.sale-sold input, tr.sale-sold select { color: #4e5964; }
+    tr.dirty.sale-reserved td { background: #efe6c8; }
+    tr.dirty.sale-sold td { background: #e7e2d4; }
+    .reason { font-size: 12px; line-height: 1.3; white-space: normal; font-weight: 650; }
+    .reason.included { color: #1d6b3a; }
+    .reason.excluded { color: #8a3b12; }
+    input.notes { width: 100%; }
+    input.override { width: 100%; }
+    .savebar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 12px 20px;
+      background: #ffffff;
+      border-top: 1px solid var(--line);
+      z-index: 5;
+    }
+    #mailout-result { margin: 0 0 16px; }
+    #mailout-result a { color: var(--blue); }
+    #mailout-result pre {
+      white-space: pre-wrap;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0 0;
+      font: 13px/1.45 Consolas, monospace;
+    }
+    input.refs { width: 280px; }
+    #save-status { color: var(--ink); font-size: 14px; }
+    dialog {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px;
+      max-width: 92vw;
+    }
+    dialog::backdrop { background: rgba(20, 28, 38, 0.55); }
+    /* Native pixels only. 1280 is the Static Maps maximum (640×640 at scale 2);
+       width/height auto keeps a smaller file from being scaled up to the viewport. */
+    dialog img {
+      width: auto;
+      height: auto;
+      max-width: min(88vw, 1280px);
+      max-height: min(78vh, 1280px);
+      object-fit: contain;
+      display: block;
+    }
+    dialog form { margin-top: 10px; text-align: right; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>AU Roof Scanner</h1>
+    <p class="lede">Graded roofs from {{ mailout_name }} and {{ quotes_name }}. A lead is included when its repair likelihood meets the threshold, unless you choose Include or Exclude.</p>
+    <div class="banner" id="scan-banner" hidden role="status" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      Currently scanning…
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="flash">
+          {% for message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <section class="panel">
+      <form class="scan" method="post" action="{{ url_for('load_gnaf_route') }}">
+        <div>
+          <label for="gnaf-postcode">Postcode</label>
+          <input id="gnaf-postcode" name="postcode" type="text" inputmode="numeric" maxlength="4" required>
+        </div>
+        <button type="submit">Load addresses</button>
+      </form>
+      <p class="note">Reads the local G-NAF extract and writes data/addresses_POSTCODE.csv. No tiles are downloaded.</p>
+    </section>
+
+    <section class="panel">
+      <form class="scan" id="scan-form" method="post" action="{{ url_for('scan') }}">
+        <div>
+          <label for="postcode">Postcode</label>
+          <input id="postcode" name="postcode" type="text" inputmode="numeric" maxlength="4" required>
+        </div>
+        <div>
+          <label for="maximum">Maximum addresses</label>
+          <input id="maximum" name="maximum" type="number" min="1" step="1" placeholder="Maximum addresses">
+        </div>
+        <label class="check" for="skip-apartments">
+          <input id="skip-apartments" name="skip_apartments" type="checkbox" checked>
+          Skip apartments / multi-unit buildings
+        </label>
+        <label class="check" for="entire">
+          <input id="entire" name="entire" type="checkbox">
+          Scan entire postcode
+        </label>
+        <input type="hidden" name="confirmed" id="confirmed" value="">
+        <button type="submit">Start scan</button>
+      </form>
+      <p class="note">You will be asked to confirm how many addresses will be scanned. Addresses scanned within the lockout period are skipped. Existing tiles are reused.</p>
+    </section>
+
+    <form id="export-form" method="post" action="{{ url_for('export_roofer') }}">
+      <div class="toolbar">
+        <button type="button" class="secondary" id="select-repairable">Select all repairable</button>
+        <button type="button" id="save-all-top">Save all changes</button>
+        <div>
+          <label for="repair-threshold">Repair likelihood threshold</label>
+          <input id="repair-threshold" type="number" min="1" max="5" step="1" value="{{ wear_threshold }}" data-initial="{{ wear_threshold }}">
+        </div>
+        <button type="button" id="prepare-mailout">Prepare mailout</button>
+        <button type="button" class="secondary" id="send-mailout">Send mailout</button>
+        <div>
+          <label for="mailout-email">Mailout email (optional)</label>
+          <input id="mailout-email" type="email" placeholder="name@example.com">
+        </div>
+        <div>
+          <label for="send-refs">Send these references</label>
+          <input id="send-refs" class="refs" type="text" placeholder="ASH-0001, MW-0004">
+        </div>
+        <div>
+          <label for="postcode-filter">Postcode</label>
+          <select id="postcode-filter">
+            <option value="all">All</option>
+            {% for code in postcodes %}
+              <option value="{{ code }}">{{ code }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="owner-filter">Occupancy</label>
+          <select id="owner-filter">
+            <option value="all">All</option>
+            <option value="owner">Owner</option>
+            <option value="rental">Rental</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+        <button type="submit">Export selected for roofer</button>
+        <div>
+          <label for="email">Email ZIP (optional)</label>
+          <input id="email" name="email" type="email" placeholder="name@example.com" form="export-form">
+        </div>
+      </div>
+    </form>
+    <p class="note">Leads are included when repair likelihood is at or above the threshold. Include forces a lead in. Exclude forces it out. Older grades have no repair score until they are graded again. Tick Send, or paste reference numbers, to export a shorter list. A high-res request is saved with the other fields. Google Static Maps is already at maximum zoom 21 and scale 2, so a closer image is not downloaded. Edit the table, then save once.</p>
+    <p id="mailout-result" hidden></p>
+    <form class="toolbar" method="post" action="{{ url_for('export_contractor') }}">
+      <p id="lead-count" class="lead-count" aria-live="polite">Showing 0 leads</p>
+      <div>
+        <label for="score-repair-threshold">Repair / Wear threshold</label>
+        <input id="score-repair-threshold" name="repair_threshold" type="number" min="1" max="5" step="1" value="3">
+      </div>
+      <div>
+        <label for="cleaning-threshold">Cleaning threshold</label>
+        <input id="cleaning-threshold" name="cleaning_threshold" type="number" min="1" max="5" step="1" value="3">
+      </div>
+      <div>
+        <label for="match-mode">Match</label>
+        <select id="match-mode" name="match">
+          <option value="repair">Repair / Wear</option>
+          <option value="cleaning">Cleaning</option>
+          <option value="either" selected>Either</option>
+        </select>
+      </div>
+      <div>
+        <label for="material-filter">Roof material</label>
+        <select id="material-filter" name="material">
+          <option value="all" selected>All</option>
+          {% for code in roof_materials %}
+            <option value="{{ code }}">{{ code.replace("_", " ") }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="button" class="secondary" id="reset-filters">Reset filters</button>
+      <button type="button" class="secondary" id="show-all" aria-pressed="false">Show ALL</button>
+      <button type="submit" name="kind" value="repair">Export Repair Leads</button>
+      <button type="submit" name="kind" value="cleaning">Export Cleaning Leads</button>
+    </form>
+    <form method="post" action="{{ url_for('open_clusters') }}">
+      <button type="submit">CLUSTERS</button>
+    </form>
+    <p class="note">Repair / Wear matches when wear or repair likelihood reaches that number. Cleaning matches when the cleaning score reaches its number. Match chooses Repair / Wear, Cleaning, or Either. Roof material starts on All. Reset filters returns those controls, occupancy, and postcode to their starting values. Export Repair Leads uses the repair threshold and material. Export Cleaning Leads uses the cleaning threshold and material. Show ALL ignores the two thresholds. Cluster folders are named by suburb, number, and work type, such as BRO-01-repair or BRO-01-cleaning. A lead graded before cleaning scores were added has no cleaning score until it is re-graded.</p>
+
+    <div class="wrap">
+      <table>
+        <colgroup>
+          <col class="c-select">
+          <col class="c-send">
+          <col class="c-image">
+          <col class="c-ref">
+          <col class="c-address">
+          <col class="c-material">
+          <col class="c-wear">
+          <col class="c-repair">
+          <col class="c-clean">
+          <col class="c-clean-defect">
+          <col class="c-override">
+          <col class="c-quote">
+          <col class="c-highres">
+          <col class="c-owner">
+          <col class="c-status">
+          <col class="c-sale">
+          <col class="c-contractor">
+          <col class="c-offered">
+          <col class="c-invoice">
+          <col class="c-outcome">
+          <col class="c-notes">
+          <col class="c-export">
+          <col class="c-actions">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Select</th>
+            <th>Send</th>
+            <th>Image</th>
+            <th>Reference</th>
+            <th>Address</th>
+            <th>Material</th>
+            <th><button type="button" class="sort" id="wear-sort" data-dir="desc">Wear ↓</button></th>
+            <th>Repair</th>
+            <th>Cleaning</th>
+            <th>Cleaning defect</th>
+            <th>Override</th>
+            <th>Quote range</th>
+            <th>High-res</th>
+            <th>Occupancy</th>
+            <th>Status</th>
+            <th>Sale status</th>
+            <th>Contractor</th>
+            <th>Offered date</th>
+            <th>Invoice number</th>
+            <th>Roofer outcome</th>
+            <th>Notes</th>
+            <th>Export</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for lead in leads %}
+            <tr class="{% if lead.sale_status == 'reserved' %}sale-reserved{% elif lead.sale_status == 'sold' %}sale-sold{% endif %}" data-owner="{{ lead.owner }}" data-postcode="{{ lead.postcode }}" data-wear="{{ lead.wear_score }}" data-repair="{{ lead.repair_likelihood }}" data-cleaning="{{ lead.cleaning_score }}" data-material="{{ lead.material_code }}" data-lead="{{ lead.lead_id }}" data-reference="{{ lead.reference }}">
+              <td>
+                <input form="export-form" type="checkbox" class="{% if lead.wear_score >= repairable_wear %}repairable{% endif %}" name="lead_id" value="{{ lead.lead_id }}" aria-label="{{ lead.lead_id }}">
+              </td>
+              <td>
+                <input class="send-select" type="checkbox" value="{{ lead.lead_id }}" aria-label="Select {{ lead.reference }} for send">
+              </td>
+              <td>
+                {% if lead.has_image %}
+                  <img class="thumb" src="{{ url_for('thumbnail', lead_id=lead.lead_id) }}" alt="">
+                {% else %}
+                  <div class="empty-thumb">No image</div>
+                {% endif %}
+                {% if lead.has_highres %}
+                  <img class="thumb" src="{{ url_for('highres_thumbnail', lead_id=lead.lead_id) }}" alt="Closer satellite image">
+                {% endif %}
+              </td>
+              <td>
+                <strong>{{ lead.reference }}</strong>
+                {% if lead.reference != lead.lead_id %}
+                  <div class="note">{{ lead.lead_id }}</div>
+                {% endif %}
+              </td>
+              <td class="address">{{ lead.address }}</td>
+              <td>{{ lead.material }}</td>
+              <td>{{ lead.wear_score }}</td>
+              <td>{{ lead.repair_likelihood if lead.repair_likelihood != "" else "—" }}</td>
+              <td>{{ lead.cleaning_score if lead.cleaning_score != "" else "—" }}</td>
+              <td>{{ lead.primary_cleaning_defect if lead.primary_cleaning_defect else "—" }}</td>
+              <td>
+                <input class="override" name="wear_override" type="number" min="1" max="5" step="1" value="{{ lead.wear_override }}" data-initial="{{ lead.wear_override }}" aria-label="Wear override for {{ lead.lead_id }}">
+              </td>
+              <td>{{ lead.quote_range }}</td>
+              <td>
+                <input name="high_res" type="checkbox" {% if lead.high_res %}checked{% endif %} data-initial="{{ 'true' if lead.high_res else 'false' }}" aria-label="Request high-res for {{ lead.lead_id }}">
+                {% if lead.high_res_note %}
+                  <div class="note highres-note">{{ lead.high_res_note }}</div>
+                {% endif %}
+              </td>
+              <td>
+                <select name="owner" data-initial="{{ lead.owner }}" aria-label="Occupancy for {{ lead.lead_id }}">
+                  {% for value, label in owners %}
+                    <option value="{{ value }}" {% if lead.owner == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <select name="status" data-initial="{{ lead.status }}" aria-label="Status for {{ lead.lead_id }}">
+                  {% for value, label in statuses %}
+                    <option value="{{ value }}" {% if lead.status == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <select name="sale_status" data-initial="{{ lead.sale_status }}" aria-label="Sale status for {{ lead.lead_id }}">
+                  {% for value, label in sale_statuses %}
+                    <option value="{{ value }}" {% if lead.sale_status == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <input name="contractor" type="text" value="{{ lead.contractor }}" data-initial="{{ lead.contractor }}" aria-label="Contractor for {{ lead.lead_id }}">
+              </td>
+              <td>
+                <input name="offered_date" type="date" value="{{ lead.offered_date }}" data-initial="{{ lead.offered_date }}" aria-label="Offered date for {{ lead.lead_id }}">
+              </td>
+              <td>
+                <input name="invoice_number" type="text" value="{{ lead.invoice_number }}" data-initial="{{ lead.invoice_number }}" aria-label="Invoice number for {{ lead.lead_id }}">
+              </td>
+              <td>
+                <select name="roofer_outcome" data-initial="{{ lead.roofer_outcome }}" aria-label="Roofer outcome for {{ lead.lead_id }}">
+                  {% for value, label in roofer_outcomes %}
+                    <option value="{{ value }}" {% if lead.roofer_outcome == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <input class="notes" name="notes" type="text" value="{{ lead.notes }}" data-initial="{{ lead.notes }}" aria-label="Notes for {{ lead.lead_id }}">
+              </td>
+              <td>
+                <select name="export_flag" data-initial="{{ lead.export_flag }}" aria-label="Export flag for {{ lead.lead_id }}">
+                  <option value="auto" {% if lead.export_flag == 'auto' %}selected{% endif %}>Auto</option>
+                  <option value="include" {% if lead.export_flag == 'include' %}selected{% endif %}>Include</option>
+                  <option value="exclude" {% if lead.export_flag == 'exclude' %}selected{% endif %}>Exclude</option>
+                </select>
+              </td>
+              <td class="actions-cell">
+                <div class="actions">
+                  {% if lead.has_image %}
+                    <button type="button" class="view" data-src="{{ url_for('roof_image', lead_id=lead.lead_id) }}">View image</button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="23">No graded roofs yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="savebar">
+      <button type="button" id="save-all-bottom">Save all changes</button>
+      <span id="save-status" role="status"></span>
+    </div>
+  </main>
+
+  <dialog id="viewer">
+    <img id="viewer-image" alt="Enhanced roof image">
+    <form method="dialog">
+      <button type="submit">Close</button>
+    </form>
+  </dialog>
+  <script>
+    const viewer = document.getElementById("viewer");
+    const viewerImage = document.getElementById("viewer-image");
+    document.querySelectorAll(".view").forEach((button) => {
+      button.addEventListener("click", () => {
+        viewerImage.onload = () => {
+          // Never draw the file larger than the pixels Google returned.
+          const capW = Math.min(viewerImage.naturalWidth, Math.floor(window.innerWidth * 0.88));
+          const capH = Math.min(viewerImage.naturalHeight, Math.floor(window.innerHeight * 0.78));
+          viewerImage.style.maxWidth = capW + "px";
+          viewerImage.style.maxHeight = capH + "px";
+        };
+        viewerImage.src = button.dataset.src;
+        viewer.showModal();
+      });
+    });
+    function applyFilters() {
+      const owner = document.getElementById("owner-filter").value;
+      const postcode = document.getElementById("postcode-filter").value;
+      const showAll = document.getElementById("show-all").getAttribute("aria-pressed") === "true";
+      const repairThreshold = Number(document.getElementById("score-repair-threshold").value);
+      const cleaningThreshold = Number(document.getElementById("cleaning-threshold").value);
+      const matchMode = document.getElementById("match-mode").value;
+      const material = document.getElementById("material-filter").value;
+      const useScore = !showAll && Number.isFinite(repairThreshold) && Number.isFinite(cleaningThreshold);
+      document.querySelectorAll("tbody tr[data-owner]").forEach((row) => {
+        const ownerMatch = owner === "all" || row.dataset.owner === owner;
+        const postcodeMatch = postcode === "all" || row.dataset.postcode === postcode;
+        const materialMatch = material === "all" || row.dataset.material === material;
+        const wear = Number(row.dataset.wear);
+        const repair = row.dataset.repair === "" ? Number.NaN : Number(row.dataset.repair);
+        const cleaning = row.dataset.cleaning === "" ? Number.NaN : Number(row.dataset.cleaning);
+        const repairSide = wear >= repairThreshold || repair >= repairThreshold;
+        const cleaningSide = cleaning >= cleaningThreshold;
+        let scoreMatch = true;
+        if (useScore && matchMode === "repair") {
+          scoreMatch = repairSide;
+        } else if (useScore && matchMode === "cleaning") {
+          scoreMatch = cleaningSide;
+        } else if (useScore) {
+          scoreMatch = repairSide || cleaningSide;
+        }
+        row.hidden = !(ownerMatch && postcodeMatch && materialMatch && scoreMatch);
+      });
+      const rows = document.querySelectorAll("tbody tr[data-owner]");
+      let shown = 0;
+      rows.forEach((row) => {
+        if (!row.hidden) {
+          shown += 1;
+        }
+      });
+      const count = document.getElementById("lead-count");
+      const format = (value) => value.toLocaleString("en-AU");
+      count.textContent = shown === rows.length
+        ? `Showing ${format(shown)} leads`
+        : `Showing ${format(shown)} of ${format(rows.length)} leads`;
+    }
+    document.getElementById("owner-filter").addEventListener("change", applyFilters);
+    document.getElementById("postcode-filter").addEventListener("change", applyFilters);
+    document.getElementById("score-repair-threshold").addEventListener("input", applyFilters);
+    document.getElementById("cleaning-threshold").addEventListener("input", applyFilters);
+    document.getElementById("material-filter").addEventListener("change", applyFilters);
+    document.getElementById("match-mode").addEventListener("change", applyFilters);
+    document.getElementById("reset-filters").addEventListener("click", () => {
+      document.getElementById("owner-filter").value = "all";
+      document.getElementById("postcode-filter").value = "all";
+      document.getElementById("score-repair-threshold").value = "3";
+      document.getElementById("cleaning-threshold").value = "3";
+      document.getElementById("match-mode").value = "either";
+      document.getElementById("material-filter").value = "all";
+      document.getElementById("show-all").setAttribute("aria-pressed", "false");
+      applyFilters();
+    });
+    document.getElementById("show-all").addEventListener("click", () => {
+      const button = document.getElementById("show-all");
+      const showingAll = button.getAttribute("aria-pressed") === "true";
+      button.setAttribute("aria-pressed", showingAll ? "false" : "true");
+      applyFilters();
+    });
+    applyFilters();
+    document.getElementById("wear-sort").addEventListener("click", () => {
+      const button = document.getElementById("wear-sort");
+      const next = button.dataset.dir === "desc" ? "asc" : "desc";
+      button.dataset.dir = next;
+      button.textContent = next === "desc" ? "Wear ↓" : "Wear ↑";
+      const tbody = document.querySelector("tbody");
+      const rows = Array.from(tbody.querySelectorAll("tr[data-wear]"));
+      rows.sort((left, right) => {
+        const delta = Number(left.dataset.wear) - Number(right.dataset.wear);
+        if (delta !== 0) {
+          return next === "asc" ? delta : -delta;
+        }
+        return left.dataset.lead.localeCompare(right.dataset.lead);
+      });
+      rows.forEach((row) => tbody.appendChild(row));
+    });
+    document.getElementById("select-repairable").addEventListener("click", () => {
+      document.querySelectorAll(".repairable").forEach((box) => {
+        if (!box.disabled) {
+          box.checked = true;
+        }
+      });
+    });
+    const saleLabels = { offered: "Offered", reserved: "Reserved", sold: "Sold" };
+    function guardOffer(row) {
+      const select = row.querySelector('[name="sale_status"]');
+      const initial = select.dataset.initial;
+      if (select.value === "offered" && (initial === "reserved" || initial === "sold")) {
+        select.value = initial;
+        showStatus(`${row.dataset.reference} cannot be offered while it is ${saleLabels[initial]}.`, false);
+      }
+    }
+    function applySaleState(row) {
+      const status = row.querySelector('[name="sale_status"]').value;
+      row.classList.toggle("sale-reserved", status === "reserved");
+      row.classList.toggle("sale-sold", status === "sold");
+      const blocked = status === "offered" || status === "reserved" || status === "sold";
+      const reason = blocked ? `This lead cannot be offered while it is ${saleLabels[status]}.` : "";
+      row.querySelectorAll('input[name="lead_id"], input.send-select').forEach((box) => {
+        box.disabled = blocked;
+        box.title = reason;
+        if (blocked) {
+          box.checked = false;
+        }
+      });
+    }
+    document.querySelectorAll("tbody tr[data-lead]").forEach(applySaleState);
+    function controlValue(control) {
+      if (control.type === "checkbox") {
+        return control.checked ? "true" : "false";
+      }
+      if (control.name === "notes" || control.name === "wear_override") {
+        return control.value.trim();
+      }
+      return control.value;
+    }
+    function rowFields(row) {
+      return {
+        lead_id: row.dataset.lead,
+        wear_override: row.querySelector('[name="wear_override"]').value.trim(),
+        notes: row.querySelector('[name="notes"]').value.trim(),
+        high_res: row.querySelector('[name="high_res"]').checked,
+        roofer_outcome: row.querySelector('[name="roofer_outcome"]').value,
+        owner: row.querySelector('[name="owner"]').value,
+        status: row.querySelector('[name="status"]').value,
+        sale_status: row.querySelector('[name="sale_status"]').value,
+        contractor: row.querySelector('[name="contractor"]').value.trim(),
+        offered_date: row.querySelector('[name="offered_date"]').value,
+        invoice_number: row.querySelector('[name="invoice_number"]').value.trim(),
+        export_flag: row.querySelector('[name="export_flag"]').value,
+      };
+    }
+    function refreshReason(row) {
+      const flag = row.querySelector('[name="export_flag"]').value;
+      const repairText = row.dataset.repair;
+      const repair = repairText === "" ? null : Number(repairText);
+      const threshold = Number(document.getElementById("repair-threshold").value);
+      const cell = row.querySelector(".reason");
+      if (!cell) {
+        return;
+      }
+      let text = "Set a repair likelihood threshold";
+      let included = false;
+      if (flag === "include") {
+        text = "Manually flagged – included";
+        included = true;
+      } else if (flag === "exclude") {
+        text = "Manually excluded";
+      } else if (repair === null) {
+        text = "No repair score – excluded";
+      } else if (Number.isFinite(repair) && Number.isFinite(threshold)) {
+        included = repair >= threshold;
+        text = `Repair likelihood ${repair} – ${included ? "included" : "excluded"}`;
+      }
+      cell.textContent = text;
+      cell.classList.toggle("included", included);
+      cell.classList.toggle("excluded", !included);
+    }
+    function refreshDirty(row) {
+      const dirty = Array.from(row.querySelectorAll("[data-initial]")).some(
+        (control) => controlValue(control) !== control.dataset.initial
+      );
+      row.classList.toggle("dirty", dirty);
+      if (row.querySelector('[name="owner"]')) {
+        row.dataset.owner = row.querySelector('[name="owner"]').value;
+      }
+    }
+    function refreshRows() {
+      document.querySelectorAll("tbody tr[data-lead]").forEach((row) => {
+        refreshReason(row);
+        refreshDirty(row);
+      });
+    }
+    function markSaved(row) {
+      row.querySelectorAll("[data-initial]").forEach((control) => {
+        control.dataset.initial = controlValue(control);
+      });
+      row.classList.remove("dirty");
+    }
+    function showStatus(message, ok) {
+      const status = document.getElementById("save-status");
+      status.textContent = message;
+      status.style.color = ok ? "#1d6b3a" : "#8a3b12";
+    }
+    async function saveChanges() {
+      const leads = Array.from(document.querySelectorAll("tbody tr.dirty")).map(rowFields);
+      const threshold = document.getElementById("repair-threshold");
+      const thresholdChanged = threshold.value !== threshold.dataset.initial;
+      if (!leads.length && !thresholdChanged) {
+        showStatus("Saved 0 leads", true);
+        return;
+      }
+      const response = await fetch("{{ url_for('save_manual') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leads, threshold: threshold.value }),
+      });
+      const result = await response.json();
+      showStatus(result.message || "Save failed.", response.ok && result.ok);
+      if (!response.ok || !result.ok) {
+        return;
+      }
+      if (result.high_res_note) {
+        document.querySelectorAll("tbody tr.dirty").forEach((row) => {
+          const box = row.querySelector('[name="high_res"]');
+          if (!box || !box.checked) {
+            return;
+          }
+          let note = row.querySelector(".highres-note");
+          if (!note) {
+            note = document.createElement("div");
+            note.className = "note highres-note";
+            box.parentElement.appendChild(note);
+          }
+          note.textContent = result.high_res_note;
+        });
+      }
+      document.querySelectorAll("tbody tr.dirty").forEach(markSaved);
+      threshold.dataset.initial = threshold.value;
+    }
+    async function prepareMailout(send) {
+      const leads = Array.from(document.querySelectorAll("tbody tr[data-lead]")).map(rowFields);
+      const response = await fetch("{{ url_for('prepare_mailout') }}", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leads,
+          threshold: document.getElementById("repair-threshold").value,
+          send,
+          email: document.getElementById("mailout-email").value.trim(),
+          references: document.getElementById("send-refs").value,
+          selected: Array.from(document.querySelectorAll("input.send-select:checked")).map((box) => box.value),
+        }),
+      });
+      const result = await response.json();
+      const panel = document.getElementById("mailout-result");
+      panel.hidden = false;
+      panel.textContent = "";
+      const text = document.createElement("span");
+      text.textContent = result.message || "Mailout failed.";
+      panel.appendChild(text);
+      if (result.download) {
+        panel.appendChild(document.createTextNode(" "));
+        const link = document.createElement("a");
+        link.href = result.download;
+        link.textContent = "Download CSV";
+        panel.appendChild(link);
+      }
+      if (result.preview) {
+        const preview = document.createElement("pre");
+        preview.textContent = result.preview;
+        panel.appendChild(preview);
+      }
+      if (response.ok && result.ok) {
+        document.querySelectorAll("tbody tr[data-lead]").forEach(markSaved);
+        const threshold = document.getElementById("repair-threshold");
+        threshold.dataset.initial = threshold.value;
+      }
+    }
+    document.querySelector("tbody").addEventListener("input", (event) => {
+      const row = event.target.closest("tr[data-lead]");
+      if (!row) {
+        return;
+      }
+      refreshReason(row);
+      refreshDirty(row);
+    });
+    document.querySelector("tbody").addEventListener("change", (event) => {
+      const row = event.target.closest("tr[data-lead]");
+      if (!row) {
+        return;
+      }
+      guardOffer(row);
+      refreshReason(row);
+      refreshDirty(row);
+      applySaleState(row);
+      applyFilters();
+    });
+    document.getElementById("repair-threshold").addEventListener("input", refreshRows);
+    document.getElementById("save-all-top").addEventListener("click", () => {
+      saveChanges().catch(() => showStatus("Save failed.", false));
+    });
+    document.getElementById("save-all-bottom").addEventListener("click", () => {
+      saveChanges().catch(() => showStatus("Save failed.", false));
+    });
+    document.getElementById("prepare-mailout").addEventListener("click", () => {
+      prepareMailout(false).catch(() => showStatus("Mailout failed.", false));
+    });
+    document.getElementById("send-mailout").addEventListener("click", () => {
+      prepareMailout(true).catch(() => showStatus("Mailout failed.", false));
+    });
+    const scanForm = document.getElementById("scan-form");
+    const scanBanner = document.getElementById("scan-banner");
+    function setScanning(active) {
+      scanBanner.hidden = !active;
+      scanForm.querySelectorAll("input, button").forEach((control) => {
+        control.disabled = active;
+      });
+    }
+    scanForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const body = new FormData(scanForm);
+      const preview = await fetch("{{ url_for('scan_preview') }}", { method: "POST", body });
+      const result = await preview.json();
+      if (!result.ok) {
+        window.alert(result.message);
+        return;
+      }
+      if (!window.confirm(result.message + " Start the scan?")) {
+        return;
+      }
+      body.set("confirmed", "yes");
+      setScanning(true);
+      try {
+        const response = await fetch(scanForm.action, { method: "POST", body });
+        if (!response.ok) {
+          throw new Error("Scan failed.");
+        }
+        window.location.assign(response.url || "{{ url_for('home') }}");
+      } catch (error) {
+        setScanning(false);
+        window.alert("The scan failed. You can start it again.");
+      }
+    });
+  </script>
+</body>
+</html>
