@@ -1,0 +1,15 @@
+.env
+.git
+.venv
+venv
+**/__pycache__
+**/*.pyc
+data/gnaf
+data/tiles
+data/annotated
+data/view_base
+data/enhanced
+data/clusters
+data/grades
+data/logs
+models

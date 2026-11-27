@@ -44,6 +44,7 @@ from scanner.mailout import push_supabase, write_mailout
 from scanner.lead_match import needs_cleaning
 from scanner.pricing import indicative_price
 from scanner.triage import Pass2Result, RoofTriage
+from scanner.verification import write_verification_report
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def grade_all(
 ) -> int:
     ensure_data_dirs()
     cleared: list[dict[str, object]] = []
+    processed: list[Address] = []
     skipped_missing = 0
     skipped_wear = 0
     not_assessable = 0
@@ -87,6 +89,7 @@ def grade_all(
             logger.error("Grading failed for %s: %s", address.lead_id, exc)
             errors += 1
             continue
+        processed.append(address)
 
         if outcome == "low_wear":
             skipped_wear += 1
@@ -117,6 +120,8 @@ def grade_all(
         push_supabase(cleared)
     # Clusters use every cleared grade, not only the batch just written.
     write_cleared_clusters()
+    report = write_verification_report(processed)
+    logger.info("Wrote address verification report to %s", report)
     return 1 if errors else 0
 
 

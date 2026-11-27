@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review roof leads</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1c2430;
+      --muted: #5c6b7a;
+      --line: #e3e8ee;
+      --paper: #ffffff;
+      --page: #f3f5f8;
+      --blue: #1f4e79;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--page);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 16px 20px;
+      background: var(--paper);
+      border-bottom: 1px solid var(--line);
+    }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; }
+    p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    button, select {
+      font: inherit;
+      border-radius: 6px;
+    }
+    button {
+      background: var(--blue);
+      color: white;
+      border: 0;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #c5ced6;
+      background: white;
+    }
+    .wrap {
+      padding: 12px 16px 24px;
+      overflow: auto;
+      max-height: calc(100vh - 78px);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--paper);
+      font-size: 14px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      padding: 8px;
+      vertical-align: middle;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: var(--paper);
+      color: var(--muted);
+      font-size: 12px;
+      z-index: 1;
+    }
+    img.thumb {
+      width: 96px;
+      height: 72px;
+      object-fit: contain;
+      background: #e8eef4;
+      border-radius: 6px;
+      display: block;
+    }
+    .empty {
+      width: 96px;
+      height: 72px;
+      border-radius: 6px;
+      background: #e8eef4;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    a.map {
+      color: var(--blue);
+      font-weight: 650;
+      text-decoration: none;
+    }
+    #note { min-height: 1.2em; font-size: 13px; color: var(--muted); }
+    .saved { color: #1d6b3a; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Review roof leads</h1>
+      <p id="summary">{{ rows|length }} leads, {{ approved_count }} approved</p>
+    </div>
+    <form method="post" action="{{ url_for('download_approved') }}">
+      <button type="submit">Download approved leads</button>
+    </form>
+  </header>
+  <div class="wrap">
+    <p id="note" role="status"></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Image</th>
+          <th>Lead</th>
+          <th>Address</th>
+          <th>Suburb</th>
+          <th>Wear</th>
+          <th>Material</th>
+          <th>Confidence</th>
+          <th>Map</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>
+              <img class="thumb" src="{{ url_for('thumbnail', lead_id=row.lead_id) }}" alt="">
+            </td>
+            <td>{{ row.lead_id }}</td>
+            <td>{{ row.street_address }}</td>
+            <td>{{ row.suburb }}</td>
+            <td>{{ row.wear_score }}</td>
+            <td>{{ row.roof_material.replace("_", " ") }}</td>
+            <td>{{ row.confidence }}</td>
+            <td>
+              {% if row.google_maps_link %}
+                <a class="map" href="{{ row.google_maps_link }}" target="_blank" rel="noopener">Open map</a>
+              {% endif %}
+            </td>
+            <td>
+              <select data-lead="{{ row.lead_id }}" aria-label="Status for {{ row.lead_id }}">
+                {% for status in statuses %}
+                  <option value="{{ status }}" {% if row.status == status %}selected{% endif %}>{{ status.replace("_", " ") }}</option>
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="9">No verification report yet. Grade some roofs first.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <script>
+    const note = document.getElementById("note");
+    const summary = document.getElementById("summary");
+    document.querySelectorAll("select[data-lead]").forEach((select) => {
+      select.addEventListener("change", async () => {
+        const previous = select.dataset.previous || select.value;
+        note.textContent = "Saving…";
+        note.className = "";
+        try {
+          const response = await fetch("{{ url_for('update_status') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lead_id: select.dataset.lead, status: select.value }),
+          });
+          const payload = await response.json();
+          if (!response.ok || !payload.ok) {
+            throw new Error(payload.error || "Could not save the status.");
+          }
+          select.dataset.previous = select.value;
+          summary.textContent = `${document.querySelectorAll("tbody tr").length} leads, ${payload.approved_count} approved`;
+          note.textContent = "Saved.";
+          note.className = "saved";
+        } catch (error) {
+          select.value = select.dataset.previous || previous;
+          note.textContent = error.message;
+          note.className = "";
+        }
+      });
+      select.dataset.previous = select.value;
+    });
+    document.querySelectorAll("img.thumb").forEach((image) => {
+      image.addEventListener("error", () => {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No image";
+        image.replaceWith(empty);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout</title>
+  <style>
+    :root { color-scheme: light; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; --warn: #8a3b12; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+    header { padding: 16px 20px; background: var(--paper); border-bottom: 1px solid var(--line); }
+    h1 { margin: 0; font-size: 26px; }
+    a { color: var(--blue); }
+    .wrap { padding: 16px 20px 40px; }
+    .disclaimer { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 12px 14px; color: #5c3b12; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 16px 0; }
+    article { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    img { width: 100%; height: 200px; object-fit: cover; background: #d9e1ea; display: block; }
+    .body { padding: 12px; }
+    .suburb { font-size: 22px; font-weight: 700; margin: 0 0 6px; }
+    form.pay { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    input[type="email"] { font: inherit; padding: 8px 10px; border: 1px solid #c5ced6; border-radius: 6px; width: 280px; }
+    button { font: inherit; background: var(--blue); color: white; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+    button.secondary { background: #e8eef4; color: var(--ink); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .short { color: var(--warn); font-weight: 650; }
+    .total { font-size: 20px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Checkout</h1>
+    <a href="{{ url_for('marketplace_cart') }}">Back to the cart</a>
+  </header>
+  <div class="wrap">
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}
+        <p class="short">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
+    {% if shortfall %}
+      <p class="short">Minimum order is {{ minimum_order }} leads.</p>
+    {% endif %}
+    <div class="grid">
+      {% for card in cards %}
+        <article>
+          <img src="{{ url_for('roof_image', lead_id=card.lead_id) }}" alt="Satellite view of a roof in {{ card.suburb }}">
+          <div class="body">
+            <h2 class="suburb">{{ card.suburb }}</h2>
+            <p>{{ card.price_label }}</p>
+            <p>{{ card.category_label }} · Wear {{ card.wear_score }}</p>
+            <form method="get" action="{{ url_for('marketplace_checkout') }}">
+              {% for other in cards if other.lead_id != card.lead_id %}
+                <input type="hidden" name="lead_id" value="{{ other.lead_id }}">
+              {% endfor %}
+              <button class="secondary" type="submit">Remove</button>
+            </form>
+          </div>
+        </article>
+      {% else %}
+        <p>Your cart has no live leads.</p>
+      {% endfor %}
+    </div>
+    {% if cards %}
+      <p class="total">Total {{ total_label }}. GST is not included.</p>
+      <form class="pay" method="post" action="{{ url_for('marketplace_checkout') }}">
+        {% for card in cards %}
+          <input type="hidden" name="lead_id" value="{{ card.lead_id }}">
+        {% endfor %}
+        <div>
+          <label for="email">Email for the lead details</label>
+          <input id="email" name="email" type="email" required placeholder="name@example.com">
+        </div>
+        <button type="submit" {% if shortfall %}disabled{% endif %}>
+          {% if stripe_ready %}Pay {{ total_label }}{% else %}Test payment {{ total_label }}{% endif %}
+        </button>
+      </form>
+      {% if not stripe_ready %}
+        <p>Stripe is not configured, so this button records a local test payment and sends the lead email when mail is set up.</p>
+      {% endif %}
+    {% endif %}
+  </div>
+</body>
+</html>

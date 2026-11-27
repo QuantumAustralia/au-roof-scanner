@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment received</title>
+  <style>
+    body { margin: 0; font-family: "Segoe UI", sans-serif; color: #1c2430; background: #f3f5f8; }
+    main { max-width: 760px; margin: 0 auto; padding: 28px 20px; }
+    h1 { font-size: 26px; }
+    li { margin-bottom: 12px; }
+    .note { color: #5c6b7a; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Payment received</h1>
+    <p>{{ message }}</p>
+    <p class="note">Every amount below is exclusive of GST.</p>
+    <ul>
+      {% for item in details %}
+        <li>
+          <strong>{{ item.suburb }}{% if item.postcode %} {{ item.postcode }}{% endif %}</strong><br>
+          {{ item.price_label }} · {{ item.category }} · Wear {{ item.wear_score }}
+        </li>
+      {% endfor %}
+    </ul>
+    <p><a href="{{ url_for('marketplace_home') }}">Back to the marketplace</a></p>
+  </main>
+  <script>localStorage.removeItem("au-roof-cart");</script>
+</body>
+</html>

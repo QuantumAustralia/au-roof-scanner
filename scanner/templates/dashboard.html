@@ -113,6 +113,8 @@
       background: var(--paper);
       font-size: 12.5px;
     }
+    table.market-table { table-layout: auto; font-size: 14px; }
+    table.market-table th, table.market-table td { width: auto; }
     col.c-select { width: 2.2%; }
     col.c-send { width: 2.2%; }
     col.c-image { width: 3.4%; }
@@ -260,6 +262,100 @@
       {% endif %}
     {% endwith %}
 
+    <section class="panel" id="marketplace-admin">
+      <h2>Marketplace</h2>
+      <p class="note">All prices are exclusive of GST. Published leads appear on the <a href="{{ url_for('marketplace_home') }}">public marketplace</a>. A buyer must take at least {{ marketplace_config.minimum_order }} leads before checkout.</p>
+      <form class="scan" method="post" action="{{ url_for('marketplace_settings') }}">
+        <div>
+          <label for="listing-days">Listing length (days)</label>
+          <input id="listing-days" name="listing_days" type="number" min="1" value="{{ marketplace_config.listing_days }}">
+        </div>
+        <div>
+          <label for="minimum-order">Minimum leads per checkout</label>
+          <input id="minimum-order" name="minimum_order" type="number" min="1" value="{{ marketplace_config.minimum_order }}">
+        </div>
+        {% for score in (2, 3, 4, 5) %}
+          <div>
+            <label for="repair-price-{{ score }}">Repair / wear {{ score }} ($ ex GST)</label>
+            <input id="repair-price-{{ score }}" name="repair_{{ score }}" type="number" min="0" value="{{ marketplace_config.repair_prices_ex_gst[score|string] }}">
+          </div>
+          <div>
+            <label for="cleaning-price-{{ score }}">Cleaning {{ score }} ($ ex GST)</label>
+            <input id="cleaning-price-{{ score }}" name="cleaning_{{ score }}" type="number" min="0" value="{{ marketplace_config.cleaning_prices_ex_gst[score|string] }}">
+          </div>
+        {% endfor %}
+        <button type="submit">Save marketplace settings</button>
+      </form>
+      <form class="scan" id="publish-form" method="post" action="{{ url_for('marketplace_publish') }}" style="margin-top: 14px;">
+        <div>
+          <label for="publish-category">Category</label>
+          <select id="publish-category" name="category">
+            <option value="repair">Repair / wear</option>
+            <option value="cleaning">Cleaning</option>
+          </select>
+        </div>
+        <div>
+          <label for="price-override">Price override ($ ex GST, optional)</label>
+          <input id="price-override" name="price_override" type="number" min="0" placeholder="Default from score">
+        </div>
+        <button type="submit">Publish selected</button>
+      </form>
+      <p class="note">Tick leads in the table, choose repair/wear or cleaning, and publish. Leave the price blank to use the score table. A manual price replaces the default for this listing.</p>
+      <h3>Live listings</h3>
+      <table class="market-table">
+        <thead>
+          <tr><th>Suburb</th><th>Category</th><th>Price ex GST</th><th>Expires</th><th>New price</th></tr>
+        </thead>
+        <tbody>
+          {% for row in live_listings %}
+            <tr>
+              <td>{{ row.suburb }}</td>
+              <td>{{ row.category_label }}</td>
+              <td>{{ row.price_label }}</td>
+              <td>{{ row.expires_label }}</td>
+              <td>
+                <form method="post" action="{{ url_for('marketplace_price') }}">
+                  <input type="hidden" name="lead_id" value="{{ row.lead_id }}">
+                  <input name="price_ex_gst" type="number" min="0" value="{{ row.price_ex_gst }}" aria-label="Price for {{ row.suburb }}">
+                  <button type="submit">Save</button>
+                </form>
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="5">No live listings.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <h3>Archive list</h3>
+      <form method="post" action="{{ url_for('marketplace_relist') }}">
+        <table class="market-table">
+          <thead>
+            <tr><th></th><th>Suburb</th><th>Category</th><th>Price ex GST</th><th>Expired</th></tr>
+          </thead>
+          <tbody>
+            {% for row in archive_listings %}
+              <tr>
+                <td><input type="checkbox" name="lead_id" value="{{ row.lead_id }}" aria-label="Re-list {{ row.suburb }}"></td>
+                <td>{{ row.suburb }}</td>
+                <td>{{ row.category_label }}</td>
+                <td>{{ row.price_label }}</td>
+                <td>{{ row.expires_label }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="5">No archived listings.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <div class="scan" style="margin-top: 10px;">
+          <div>
+            <label for="relist-price">Re-list price ($ ex GST, optional)</label>
+            <input id="relist-price" name="price_override" type="number" min="0" placeholder="Keep current price">
+          </div>
+          <button type="submit">Re-list selected</button>
+        </div>
+      </form>
+    </section>
+
     <section class="panel">
       <form class="scan" method="post" action="{{ url_for('load_gnaf_route') }}">
         <div>
@@ -378,7 +474,7 @@
     <p class="note">Repair / Wear matches when wear or repair likelihood reaches that number. Cleaning matches when the cleaning score reaches its number. Match chooses Repair / Wear, Cleaning, or Either. Roof material starts on All. Reset filters returns those controls, occupancy, and postcode to their starting values. Export Repair Leads uses the repair threshold and material. Export Cleaning Leads uses the cleaning threshold and material. Show ALL ignores the two thresholds. Cluster folders are named by suburb, number, and work type, such as BRO-01-repair or BRO-01-cleaning. A lead graded before cleaning scores were added has no cleaning score until it is re-graded.</p>
 
     <div class="wrap">
-      <table>
+      <table id="leads">
         <colgroup>
           <col class="c-select">
           <col class="c-send">
@@ -548,6 +644,24 @@
     </form>
   </dialog>
   <script>
+    const publishForm = document.getElementById("publish-form");
+    if (publishForm) {
+      publishForm.addEventListener("submit", (event) => {
+        const ids = [...document.querySelectorAll('#leads tbody input[name="lead_id"]:checked')].map((box) => box.value);
+        if (!ids.length) {
+          event.preventDefault();
+          window.alert("Select one or more leads in the table before publishing.");
+          return;
+        }
+        ids.forEach((id) => {
+          const hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = "lead_id";
+          hidden.value = id;
+          publishForm.appendChild(hidden);
+        });
+      });
+    }
     const viewer = document.getElementById("viewer");
     const viewerImage = document.getElementById("viewer-image");
     document.querySelectorAll(".view").forEach((button) => {

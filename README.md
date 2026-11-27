@@ -218,6 +218,48 @@ Omit `--limit` and `--lead` to re-grade every saved tile. That calls Gemini once
 
 Use the checkboxes or **Select all repairable**, and keep the high-res flag and status controls. **Export selected for roofer** downloads a ZIP. Each image shows the roof and any yellow repair box, with the suburb on the image and in the file name. The street address is not included. Enter an email address as well if you want a copy sent; that needs `SMTP_HOST` and `SMTP_FROM` in `.env`.
 
+## Marketplace
+
+The public page is on the same app as the scanner dashboard: http://127.0.0.1:5000/marketplace. There is no contractor login. Only leads you publish are shown. Each tile shows the rooftop image, the suburb, the price exclusive of GST, the category (repair/wear or cleaning), and the wear score. The street address is omitted until payment.
+
+Default prices for wear/repair scores 2 to 5, cleaning scores 2 to 5, the listing length (30 days), and the minimum order (10 leads) are in `marketplace_config.json`. Edit them in the **Marketplace** panel on the dashboard. A price override on publish, or on a live row, replaces the score default for that lead. Every price, the checkout total, and the email say the amount is exclusive of GST.
+
+Tick one or more rows and choose **Publish selected**. Live rows show the expiry date and the price. When the listing date passes, the lead leaves the public page and appears in **Archive list**. **Re-list selected** starts the timer again.
+
+The cart is stored in the browser. The cart and the checkout page say **Minimum order is 10 leads** when the buyer is short, and the checkout button stays disabled until the minimum is met. The server refuses a payment under that number as well. Change the number in the dashboard; the pages use the saved value.
+
+Checkout uses Stripe when `STRIPE_SECRET_KEY` is set in `.env`. The charge is the listed ex-GST amount in Australian dollars. With the key blank, **Test payment** marks the order paid locally so you can check the email. After payment, the buyer is emailed the street address, suburb, category, wear score, and price. That email uses the same `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` settings as the mail-out. If mail is not configured, the addresses are shown on the payment page instead.
+
+The marketplace and the checkout page both carry this notice: there are no warranties or guarantees on image accuracy or roof condition; the pictures are third-party satellite imagery and their age, currency, and accuracy cannot be guaranteed; leads are information only and buyers should inspect the roof themselves.
+
+Local test:
+
+```powershell
+python -m scanner.dashboard
+```
+
+Open http://127.0.0.1:5000, publish at least the minimum number of leads, then open http://127.0.0.1:5000/marketplace. Add them to the cart, continue to checkout, and use **Test payment** while `STRIPE_SECRET_KEY` is empty. Put a Stripe test secret key in `.env` and restart the dashboard when you want the real Checkout page.
+
+## Address verification
+
+When `python -m scanner.grade_roofs` finishes, it writes `data/verification_report.csv` and `data/verification_report.html` for every lead graded in that run. A lead that is already in the CSV keeps its status. A new lead is `pending_review`.
+
+Open the HTML report in a browser:
+
+```powershell
+start data\verification_report.html
+```
+
+Each row has a Google Maps link for the graded latitude and longitude. Check the address, then set the status to `approved` or `rejected` before a mail-out. The next grade refreshes the scores and map link and leaves an existing status as you set it.
+
+Start the review page from the project directory:
+
+```powershell
+python dashboard/app.py
+```
+
+Open http://127.0.0.1:8080 . The port comes from `APP_PORT` in `.env`. The table reads `data/verification_report.csv`. Changing a status saves that file straight away. **Download approved leads** writes `data/approved_for_mailout.csv` and downloads the same file. It contains only rows marked approved. Lightsail steps are in `deploy/README.md`.
+
 ## Limits
 
 - Satellite imagery misses underside damage, flashing detail, and anything under trees or shade.

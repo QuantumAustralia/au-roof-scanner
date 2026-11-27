@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cart</title>
+  <style>
+    :root { color-scheme: light; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; --warn: #8a3b12; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+    header { padding: 16px 20px; background: var(--paper); border-bottom: 1px solid var(--line); }
+    h1 { margin: 0; font-size: 26px; }
+    a { color: var(--blue); }
+    .wrap { padding: 16px 20px 40px; max-width: 980px; }
+    .disclaimer { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 12px 14px; color: #5c3b12; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
+    article { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    img { width: 100%; height: 200px; object-fit: cover; background: #d9e1ea; display: block; }
+    .body { padding: 12px; }
+    .suburb { font-size: 22px; font-weight: 700; margin: 0 0 6px; }
+    button { font: inherit; background: var(--blue); color: white; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+    button.secondary { background: #e8eef4; color: var(--ink); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .short { color: var(--warn); font-weight: 650; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Cart</h1>
+    <a href="{{ url_for('marketplace_home') }}">Back to the marketplace</a>
+  </header>
+  <div class="wrap">
+    <p id="minimum-note" class="short" hidden>Minimum order is {{ minimum_order }} leads.</p>
+    <div id="grid" class="grid"></div>
+    <p>
+      <button type="button" id="checkout" disabled>Continue to checkout</button>
+    </p>
+  </div>
+  <script>
+    const minimum = {{ minimum_order }};
+    const catalog = {{ cards|tojson }};
+    const storageKey = "au-roof-cart";
+    const byId = Object.fromEntries(catalog.map((card) => [card.lead_id, card]));
+    function readCart() {
+      try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); }
+      catch (error) { return []; }
+    }
+    function writeCart(items) {
+      localStorage.setItem(storageKey, JSON.stringify(items));
+      draw(items);
+    }
+    function draw(items) {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+      items.forEach((item) => {
+        const card = byId[item.id];
+        if (!card) return;
+        const article = document.createElement("article");
+        article.innerHTML = `
+          <img alt="">
+          <div class="body">
+            <h2 class="suburb"></h2>
+            <p></p>
+            <p></p>
+            <button type="button" class="secondary">Remove</button>
+          </div>`;
+        const image = article.querySelector("img");
+        image.src = "/roof/" + card.lead_id;
+        image.alt = "Satellite view of a roof in " + card.suburb;
+        article.querySelector("h2").textContent = card.suburb;
+        article.querySelectorAll("p")[0].textContent = card.price_label;
+        article.querySelectorAll("p")[1].textContent = `${card.category_label} · Wear ${card.wear_score}`;
+        article.querySelector("button").addEventListener("click", () => {
+          writeCart(readCart().filter((entry) => entry.id !== card.lead_id));
+        });
+        grid.appendChild(article);
+      });
+      const kept = items.filter((item) => byId[item.id]);
+      const note = document.getElementById("minimum-note");
+      const button = document.getElementById("checkout");
+      const short = kept.length < minimum;
+      note.hidden = kept.length === 0 || !short;
+      button.disabled = short;
+    }
+    document.getElementById("checkout").addEventListener("click", () => {
+      const ids = readCart().map((item) => item.id).filter((id) => byId[id]);
+      if (ids.length < minimum) return;
+      const params = new URLSearchParams();
+      ids.forEach((id) => params.append("lead_id", id));
+      window.location = "{{ url_for('marketplace_checkout') }}?" + params.toString();
+    });
+    draw(readCart());
+  </script>
+</body>
+</html>

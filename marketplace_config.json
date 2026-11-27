@@ -1,0 +1,16 @@
+{
+  "listing_days": 30,
+  "minimum_order": 10,
+  "repair_prices_ex_gst": {
+    "2": 20,
+    "3": 40,
+    "4": 60,
+    "5": 80
+  },
+  "cleaning_prices_ex_gst": {
+    "2": 10,
+    "3": 20,
+    "4": 30,
+    "5": 40
+  }
+}

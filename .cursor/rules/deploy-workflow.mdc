@@ -1,0 +1,12 @@
+---
+description: Edit in Cursor, and deploy to GitHub or Lightsail only when explicitly approved
+alwaysApply: true
+---
+
+# Edit, commit, and deploy
+
+1. All editing happens in this Cursor project.
+2. Do not commit or push until the user explicitly says the changes are finished, checked, and approved.
+3. Do not pull onto the Lightsail server, and do not redeploy, until the user explicitly instructs that.
+
+The Lightsail app that was built yesterday lives at `/home/ubuntu/au-roof-scanner`. A later copy under `/opt/au-roof-scanner` is not the source of truth.

@@ -21,6 +21,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from io import BytesIO, StringIO
 from pathlib import Path
+from urllib.parse import urlencode
 
 from flask import Flask, Response, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 from PIL import Image, ImageDraw
@@ -54,6 +55,7 @@ from scanner.lead_match import (
 )
 from scanner.load_gnaf import load_postcode
 from scanner.mailout import write_mailout
+from scanner import marketplace as market
 from scanner.quote import QUOTES_PATH, quote_cleared_csv
 from scanner.scan_guard import is_locked, load_lockout, record_scanned
 from scanner.triage import RoofTriage
@@ -386,6 +388,25 @@ def _coordinate(value: object) -> float | None:
         return None
 
 
+def _roof_area(mailout: dict[str, str] | None) -> float | None:
+    """Roof area in square metres from the mail-out row, when it was recorded."""
+    raw = (mailout or {}).get("roof_area_m2")
+    try:
+        number = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _primary_defect(mailout: dict[str, str] | None, grade: dict | None) -> str:
+    """Structural defect code. Cleaning defects stay on their own field."""
+    if grade:
+        text = str((grade.get("pass1") or {}).get("primary_defect") or "").strip()
+        if text:
+            return text
+    return str((mailout or {}).get("primary_defect") or "").strip()
+
+
 def _postcode(mailout: dict[str, str] | None, quote: dict[str, str] | None, grade: dict | None) -> str:
     if mailout and (mailout.get("postcode") or "").strip():
         return mailout["postcode"].strip()
@@ -486,6 +507,8 @@ def load_leads() -> tuple[list[dict[str, object]], Path | None, Path]:
                 "lon": _coordinate((source or {}).get("lon")),
                 "material_code": material_code,
                 "material": material_code.replace("_", " ") if material_code else "—",
+                "roof_area_m2": _roof_area(mailout),
+                "primary_defect": _primary_defect(mailout, grade),
                 "wear_score": wear,
                 "repair_likelihood": "" if repair is None else repair,
                 "cleaning_score": "" if cleaning is None else cleaning,
@@ -1132,6 +1155,9 @@ def home():
         roof_materials=STORED_MATERIALS,
         roofer_outcomes=ROOFER_OUTCOMES,
         sale_statuses=SALE_STATUSES,
+        marketplace_config=market.load_config(),
+        live_listings=market.live_rows(leads),
+        archive_listings=market.archive_rows(leads),
     )
 
 
@@ -1500,10 +1526,263 @@ def thumbnail(lead_id: str):
     return send_file(buffer, mimetype="image/png")
 
 
+def _marketplace_leads() -> list[dict]:
+    leads, _, _ = load_leads()
+    return leads
+
+
+def _optional_price(field: str) -> int | None:
+    raw = (request.form.get(field) or "").strip()
+    if not raw:
+        return None
+    return int(raw)
+
+
+def _checkout_redirect(cards: list[dict]):
+    query = urlencode([("lead_id", card["lead_id"]) for card in cards])
+    target = url_for("marketplace_checkout")
+    return redirect(f"{target}?{query}" if query else target)
+
+
+@app.get("/marketplace")
+def marketplace_home():
+    """Public catalogue. Street addresses are not on this page."""
+    config = market.load_config()
+    return render_template(
+        "marketplace.html",
+        cards=market.public_cards(_marketplace_leads()),
+        minimum_order=config["minimum_order"],
+    )
+
+
+@app.get("/marketplace/cart")
+def marketplace_cart():
+    config = market.load_config()
+    return render_template(
+        "marketplace_cart.html",
+        cards=market.public_cards(_marketplace_leads()),
+        minimum_order=config["minimum_order"],
+    )
+
+
+@app.route("/marketplace/checkout", methods=["GET", "POST"])
+def marketplace_checkout():
+    """Cart review and payment. The pay button stays off under the minimum."""
+    config = market.load_config()
+    lead_ids = request.form.getlist("lead_id") or request.args.getlist("lead_id")
+    cards = market.cards_for_checkout(_marketplace_leads(), lead_ids)
+    shortfall = market.order_shortfall(len(cards))
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip()
+        if shortfall:
+            flash(f"Minimum order is {config['minimum_order']} leads.")
+            return _checkout_redirect(cards)
+        if not email or "@" not in email:
+            flash("Enter an email address so the lead details can be sent after payment.")
+            return _checkout_redirect(cards)
+        order = market.create_order(email, cards)
+        return _begin_payment(order, cards)
+    total = sum(int(card["price_ex_gst"]) for card in cards)
+    return render_template(
+        "marketplace_checkout.html",
+        cards=cards,
+        minimum_order=config["minimum_order"],
+        shortfall=shortfall,
+        total_label=market.format_price(total),
+        stripe_ready=bool(env("STRIPE_SECRET_KEY")),
+    )
+
+
+@app.get("/marketplace/success")
+def marketplace_success():
+    """Confirm a Stripe session, or a local test payment, then email the addresses."""
+    order = None
+    session_id = (request.args.get("session_id") or "").strip()
+    if session_id and session_id != "{CHECKOUT_SESSION_ID}":
+        order = market.order_by_session(session_id)
+        paid = _stripe_session_paid(session_id)
+        if order and paid:
+            order = market.mark_paid(order["order_id"])
+    else:
+        order = market.get_order((request.args.get("order_id") or "").strip())
+    if not order or order.get("status") != "paid":
+        flash("Payment is not complete.")
+        return redirect(url_for("marketplace_home"))
+    details = market.purchased_details(_marketplace_leads(), order)
+    message = "A copy of these addresses has been sent to your email."
+    if not order.get("emailed"):
+        message = _email_purchase(order, details)
+        if message.startswith("Lead details emailed"):
+            market.mark_emailed(order["order_id"])
+    return render_template("marketplace_success.html", details=details, message=message)
+
+
+@app.post("/marketplace/settings")
+def marketplace_settings():
+    repair = {str(score): request.form.get(f"repair_{score}") for score in (2, 3, 4, 5)}
+    cleaning = {str(score): request.form.get(f"cleaning_{score}") for score in (2, 3, 4, 5)}
+    market.save_config(
+        {
+            "listing_days": request.form.get("listing_days"),
+            "minimum_order": request.form.get("minimum_order"),
+            "repair_prices_ex_gst": repair,
+            "cleaning_prices_ex_gst": cleaning,
+        }
+    )
+    flash("Marketplace prices, listing length, and minimum order saved. Amounts are exclusive of GST.")
+    return redirect(url_for("home"))
+
+
+@app.post("/marketplace/publish")
+def marketplace_publish():
+    category = (request.form.get("category") or "").strip()
+    try:
+        price = _optional_price("price_override")
+        count = market.publish(_marketplace_leads(), request.form.getlist("lead_id"), category, price)
+    except ValueError as exc:
+        flash(str(exc))
+        return redirect(url_for("home"))
+    flash(f"Published {count} lead{'s' if count != 1 else ''}. Prices are exclusive of GST.")
+    return redirect(url_for("home"))
+
+
+@app.post("/marketplace/relist")
+def marketplace_relist():
+    try:
+        price = _optional_price("price_override")
+        count = market.relist(request.form.getlist("lead_id"), price)
+    except ValueError as exc:
+        flash(str(exc))
+        return redirect(url_for("home"))
+    flash(f"Re-listed {count} lead{'s' if count != 1 else ''}. The listing timer has restarted.")
+    return redirect(url_for("home"))
+
+
+@app.post("/marketplace/price")
+def marketplace_price():
+    lead_id = safe_lead_id(request.form.get("lead_id") or "")
+    try:
+        market.set_price(lead_id, int(request.form.get("price_ex_gst") or ""))
+    except (TypeError, ValueError) as exc:
+        flash(str(exc) or "Enter a price exclusive of GST.")
+        return redirect(url_for("home"))
+    flash(f"Price for {lead_id} is now {market.format_price(int(request.form.get('price_ex_gst')))}.")
+    return redirect(url_for("home"))
+
+
+def _begin_payment(order: dict, cards: list[dict]):
+    """Open Stripe Checkout, or record a local test payment when no secret key is set."""
+    secret = env("STRIPE_SECRET_KEY")
+    if not secret:
+        market.mark_paid(order["order_id"])
+        return redirect(url_for("marketplace_success", order_id=order["order_id"]))
+    success_url = url_for("marketplace_success", _external=True) + "?session_id={CHECKOUT_SESSION_ID}"
+    cancel_url = url_for("marketplace_home", _external=True)
+    try:
+        session_id, checkout_url = _stripe_checkout(secret, order, cards, success_url, cancel_url)
+    except Exception as exc:
+        logger.warning("Stripe checkout failed: %s", exc)
+        flash("Stripe could not start the payment. Check STRIPE_SECRET_KEY and try again.")
+        return _checkout_redirect(cards)
+    market.attach_session(order["order_id"], session_id)
+    return redirect(checkout_url)
+
+
+def _stripe_checkout(secret: str, order: dict, cards: list[dict], success_url: str, cancel_url: str) -> tuple[str, str]:
+    """Create a one-off Stripe Checkout session. Amounts are cents, exclusive of GST."""
+    import httpx
+
+    data = [
+        ("mode", "payment"),
+        ("success_url", success_url),
+        ("cancel_url", cancel_url),
+        ("customer_email", order["email"]),
+        ("metadata[order_id]", order["order_id"]),
+    ]
+    for index, card in enumerate(cards):
+        prefix = f"line_items[{index}]"
+        name = f"{card['category_label']} lead in {card['suburb']} (ex GST)"
+        data.extend(
+            [
+                (f"{prefix}[quantity]", "1"),
+                (f"{prefix}[price_data][currency]", "aud"),
+                (f"{prefix}[price_data][unit_amount]", str(int(card["price_ex_gst"]) * 100)),
+                (f"{prefix}[price_data][product_data][name]", name),
+                (
+                    f"{prefix}[price_data][product_data][description]",
+                    "Price exclusive of GST. Satellite imagery and roof condition are not guaranteed.",
+                ),
+            ]
+        )
+    response = httpx.post(
+        "https://api.stripe.com/v1/checkout/sessions",
+        auth=(secret, ""),
+        data=data,
+        timeout=30,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return str(payload["id"]), str(payload["url"])
+
+
+def _stripe_session_paid(session_id: str) -> bool:
+    secret = env("STRIPE_SECRET_KEY")
+    if not secret:
+        return False
+    import httpx
+
+    response = httpx.get(
+        f"https://api.stripe.com/v1/checkout/sessions/{session_id}",
+        auth=(secret, ""),
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        return False
+    return response.json().get("payment_status") == "paid"
+
+
+def _email_purchase(order: dict, details: list[dict]) -> str:
+    """Send the street addresses after payment. Prices in the letter are exclusive of GST."""
+    host = env("SMTP_HOST")
+    sender = env("SMTP_FROM") or env("SMTP_USER")
+    lines = [
+        f"{item['address']}, {item['suburb']} {item['postcode']} — {item['price_label']} ({item['category']}, wear {item['wear_score']})"
+        for item in details
+    ]
+    body = (
+        "Your roof leads are below. Every price is exclusive of GST.\n\n"
+        + "\n".join(lines)
+        + f"\n\nTotal {market.format_price(order['amount_ex_gst'])}. GST is not included.\n\n"
+        "There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. "
+        "Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. "
+        "Leads are provided for information purposes only and buyers should conduct their own inspections.\n"
+    )
+    if not host or not sender:
+        return "Payment recorded. Email is not configured, so the addresses are shown on this page."
+    message = EmailMessage()
+    message["Subject"] = "Your roof leads (prices exclusive of GST)"
+    message["From"] = sender
+    message["To"] = order["email"]
+    message.set_content(body)
+    try:
+        with smtplib.SMTP(host, int(env("SMTP_PORT") or "587"), timeout=30) as client:
+            client.starttls()
+            user = env("SMTP_USER")
+            password = env("SMTP_PASSWORD")
+            if user:
+                client.login(user, password)
+            client.send_message(message)
+    except (OSError, smtplib.SMTPException) as exc:
+        return f"Payment recorded. The email could not be sent ({exc}). The addresses are shown on this page."
+    return f"Lead details emailed to {order['email']}."
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     ensure_data_dirs()
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    host = env("SCANNER_HOST") or "127.0.0.1"
+    port = int(env("SCANNER_PORT") or "5000")
+    app.run(host=host, port=port, debug=False)
 
 
 if __name__ == "__main__":

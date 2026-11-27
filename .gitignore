@@ -16,6 +16,7 @@ data/cleared_for_mailout.csv
 data/manual_status.json
 data/owner_flag.json
 data/manual_inputs.json
+data/marketplace_orders.json
 data/export_settings.json
 data/reference_numbers.json
 data/mailout/

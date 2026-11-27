@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roof lead marketplace</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <style>
+    :root {
+      color-scheme: light;
+      --navy: #1b2838;
+      --ink: #1c2430;
+      --muted: #5c6b7a;
+      --line: #e4e9ef;
+      --paper: #ffffff;
+      --page: #f4f6f8;
+      --blue: #1f4e79;
+      --warn: #8a3b12;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--page);
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+      padding: 18px 24px;
+      background: var(--navy);
+      color: #f7f9fb;
+    }
+    header h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+    header p { margin: 4px 0 0; color: #c5d0dc; font-size: 14px; }
+    header a { color: #ffffff; font-weight: 650; text-decoration: none; }
+    .header-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    header button { background: #ffffff; color: var(--navy); }
+    header button:disabled { opacity: 0.55; }
+    #minimum-note { color: #f3d2a6; font-size: 13px; font-weight: 650; }
+    .wrap { padding: 20px 24px 40px; }
+    .disclaimer {
+      background: #fff8ee;
+      border: 1px solid #ead7b4;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 0 0 16px;
+      color: #5c4318;
+      line-height: 1.45;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .toolbar p { margin: 0; color: var(--muted); }
+    button, .linkish {
+      font: inherit;
+      background: var(--blue);
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 14px;
+      cursor: pointer;
+    }
+    button.secondary { background: #e8eef4; color: var(--ink); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .stage {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    #map {
+      height: 520px;
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(27, 40, 56, 0.12);
+      background: #d5dee8;
+    }
+    .pin span {
+      display: block;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--navy);
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(27, 40, 56, 0.35);
+    }
+    .leaflet-div-icon.pin { background: transparent; border: 0; }
+    .pin-active span { background: #c9842a; }
+    .lists { display: flex; flex-direction: column; gap: 22px; }
+    section h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      color: var(--navy);
+    }
+    .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    article {
+      display: grid;
+      grid-template-columns: 148px 1fr;
+      background: var(--paper);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(27, 40, 56, 0.08);
+    }
+    article img { width: 100%; height: 100%; min-height: 148px; object-fit: cover; background: #d9e1ea; }
+    .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; }
+    .place { margin: 0; font-size: 20px; }
+    .price { margin: 0; font-weight: 650; }
+    dl { display: grid; grid-template-columns: 108px 1fr; gap: 4px 8px; margin: 4px 0 8px; font-size: 14px; }
+    dt { color: var(--muted); }
+    dd { margin: 0; }
+    .wear {
+      display: inline-block;
+      min-width: 1.6em;
+      padding: 1px 8px;
+      border-radius: 999px;
+      color: #ffffff;
+      font-weight: 700;
+      text-align: center;
+    }
+    .wear-1 { background: #2f7d4a; }
+    .wear-2 { background: #6a8f2a; }
+    .wear-3 { background: #c48a12; }
+    .wear-4 { background: #d4651a; }
+    .wear-5 { background: #b42318; }
+    .empty { margin: 0; color: var(--muted); }
+    .short { color: var(--warn); font-weight: 650; }
+    @media (max-width: 860px) {
+      header, .wrap { padding-left: 16px; padding-right: 16px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .stage { grid-template-columns: 1fr; }
+      #map { height: 320px; }
+      article { grid-template-columns: 1fr; }
+      article img { height: 180px; }
+      .toolbar { align-items: flex-start; flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Roof lead marketplace</h1>
+      <p>Leads for Australian roofers. Prices are exclusive of GST.</p>
+    </div>
+    <div class="header-actions">
+      <span id="minimum-note" hidden>Minimum order is {{ minimum_order }} leads.</span>
+      <a href="{{ url_for('marketplace_cart') }}">Cart (<span id="cart-count">0</span>)</a>
+      <a id="checkout-link" href="{{ url_for('marketplace_cart') }}"><button type="button" id="checkout-button" disabled>Checkout</button></a>
+    </div>
+  </header>
+  <div class="wrap">
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}
+        <p class="short">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
+    <div class="toolbar">
+      <p id="filter-label">Select a suburb on the map.</p>
+      <button type="button" id="show-all" class="secondary">Show all</button>
+    </div>
+    <div class="stage">
+      <div id="map" role="region" aria-label="Suburbs with leads"></div>
+      <div class="lists">
+        <section>
+          <h2>REPAIRS</h2>
+          <div id="repairs" class="grid"></div>
+        </section>
+        <section>
+          <h2>CLEANING</h2>
+          <div id="cleaning" class="grid"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+  <script id="lead-data" type="application/json">{{ cards|tojson }}</script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const minimum = {{ minimum_order }};
+    const storageKey = "au-roof-cart";
+    const leads = JSON.parse(document.getElementById("lead-data").textContent).map((lead) => ({
+      ...lead,
+      category: lead.category === "cleaning" ? "cleaning" : "repair",
+    }));
+    const map = L.map("map", { scrollWheelZoom: true }).setView([-28.0167, 153.4], 10);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: "&copy; OpenStreetMap",
+    }).addTo(map);
+    const markers = new Map();
+
+    function suburbKey(lead) {
+      return `${lead.suburb}|${lead.postcode || ""}`;
+    }
+    function placeLabel(lead) {
+      return lead.postcode ? `${lead.suburb} ${lead.postcode}` : lead.suburb;
+    }
+    function readCart() {
+      try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); }
+      catch (error) { return []; }
+    }
+    function writeCart(items) {
+      localStorage.setItem(storageKey, JSON.stringify(items));
+      renderCart(items);
+      draw(currentKey, showEverything);
+    }
+    function renderCart(items) {
+      document.getElementById("cart-count").textContent = String(items.length);
+      const note = document.getElementById("minimum-note");
+      const button = document.getElementById("checkout-button");
+      const short = items.length < minimum;
+      note.hidden = items.length === 0 || !short;
+      button.disabled = short;
+    }
+    function wearClass(score) {
+      const number = Number(score);
+      if (number >= 5) return "wear-5";
+      if (number === 4) return "wear-4";
+      if (number === 3) return "wear-3";
+      if (number === 2) return "wear-2";
+      return "wear-1";
+    }
+    function card(lead) {
+      const claimed = readCart().some((item) => item.id === lead.lead_id);
+      const article = document.createElement("article");
+      const image = document.createElement("img");
+      image.src = "/roof/" + lead.lead_id;
+      image.alt = "Satellite view of a roof in " + lead.suburb;
+      const body = document.createElement("div");
+      body.className = "body";
+      const title = document.createElement("h3");
+      title.className = "place";
+      title.textContent = placeLabel(lead);
+      const price = document.createElement("p");
+      price.className = "price";
+      price.textContent = lead.price_label;
+      const facts = document.createElement("dl");
+      const rows = [
+        ["Roof material", lead.material || "Not recorded"],
+        ["Wear score", String(lead.wear_score)],
+        ["Defect type", lead.defect || "Not recorded"],
+        ["Roof area", lead.roof_area_label || "Not recorded"],
+      ];
+      rows.forEach(([name, value]) => {
+        const term = document.createElement("dt");
+        term.textContent = name;
+        const detail = document.createElement("dd");
+        if (name === "Wear score") {
+          const pill = document.createElement("span");
+          pill.className = "wear " + wearClass(lead.wear_score);
+          pill.textContent = value;
+          detail.appendChild(pill);
+        } else {
+          detail.textContent = value;
+        }
+        facts.append(term, detail);
+      });
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = claimed ? "Claimed" : "Claim Lead";
+      button.disabled = claimed;
+      button.addEventListener("click", () => {
+        const items = readCart();
+        if (!items.some((item) => item.id === lead.lead_id)) {
+          items.push({ id: lead.lead_id, suburb: lead.suburb, price: lead.price_label });
+          writeCart(items);
+        }
+      });
+      body.append(title, price, facts, button);
+      article.append(image, body);
+      return article;
+    }
+    let currentKey = "";
+    let showEverything = false;
+    function visibleLeads() {
+      if (showEverything) return leads;
+      if (!currentKey) return [];
+      return leads.filter((lead) => suburbKey(lead) === currentKey);
+    }
+    function draw(key, all) {
+      currentKey = key;
+      showEverything = all;
+      const chosen = visibleLeads();
+      const repairs = document.getElementById("repairs");
+      const cleaning = document.getElementById("cleaning");
+      repairs.replaceChildren();
+      cleaning.replaceChildren();
+      chosen.filter((lead) => lead.category !== "cleaning").forEach((lead) => repairs.appendChild(card(lead)));
+      chosen.filter((lead) => lead.category === "cleaning").forEach((lead) => cleaning.appendChild(card(lead)));
+      if (!repairs.childElementCount) {
+        const note = document.createElement("p");
+        note.className = "empty";
+        note.textContent = leads.length ? (chosen.length || all || key ? "No repair leads in this view." : "Select a suburb to see repair leads.") : "No leads are published at the moment.";
+        repairs.appendChild(note);
+      }
+      if (!cleaning.childElementCount) {
+        const note = document.createElement("p");
+        note.className = "empty";
+        note.textContent = leads.length ? (chosen.length || all || key ? "No cleaning leads in this view." : "Select a suburb to see cleaning leads.") : "No leads are published at the moment.";
+        cleaning.appendChild(note);
+      }
+      const label = document.getElementById("filter-label");
+      if (all) label.textContent = "Showing every published suburb.";
+      else if (key) label.textContent = "Showing " + key.replace("|", " ");
+      else label.textContent = leads.length ? "Select a suburb on the map." : "No leads are published at the moment.";
+      markers.forEach((marker, markerKey) => {
+        marker.setIcon(L.divIcon({
+          className: "pin" + (markerKey === key && !all ? " pin-active" : ""),
+          html: "<span></span>",
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        }));
+      });
+    }
+    const groups = new Map();
+    leads.forEach((lead) => {
+      const key = suburbKey(lead);
+      const group = groups.get(key) || { lead, count: 0, lat: 0, lon: 0, points: 0 };
+      group.count += 1;
+      if (typeof lead.lat === "number" && typeof lead.lon === "number") {
+        group.lat += lead.lat;
+        group.lon += lead.lon;
+        group.points += 1;
+      }
+      groups.set(key, group);
+    });
+    groups.forEach((group, key) => {
+      if (!group.points) return;
+      const marker = L.marker([group.lat / group.points, group.lon / group.points], {
+        icon: L.divIcon({ className: "pin", html: "<span></span>", iconSize: [16, 16], iconAnchor: [8, 8] }),
+      }).addTo(map);
+      marker.bindTooltip(`${placeLabel(group.lead)} · ${group.count} lead${group.count === 1 ? "" : "s"}`);
+      marker.on("click", () => draw(key, false));
+      markers.set(key, marker);
+    });
+    document.getElementById("show-all").addEventListener("click", () => draw("", true));
+    document.getElementById("checkout-link").addEventListener("click", (event) => {
+      if (readCart().length < minimum) event.preventDefault();
+    });
+    renderCart(readCart());
+    draw("", false);
+  </script>
+</body>
+</html>

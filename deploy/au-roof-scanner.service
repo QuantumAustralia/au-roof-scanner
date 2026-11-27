@@ -1,0 +1,17 @@
+[Unit]
+Description=AU roof scanner review dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/au-roof-scanner
+EnvironmentFile=/opt/au-roof-scanner/.env
+ExecStart=/opt/au-roof-scanner/deploy/start-dashboard.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
