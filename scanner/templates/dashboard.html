@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AU Roof Scanner</title>
+  <title>QMS Roof Scan</title>
   <style>
     :root {
       color-scheme: light;
@@ -22,8 +22,42 @@
       color: var(--ink);
       background: var(--page);
     }
+    header.site-banner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      background: #010F34;
+      color: #f7f9fb;
+      padding: 18px 20px;
+    }
+    header.site-banner h1 { color: #f7f9fb; }
+    header.site-banner .lede { color: #c5d0dc; margin: 0; }
+    a.admin-link {
+      flex: 0 0 auto;
+      color: #ffffff;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-decoration: none;
+      border: 1px solid #ffffff;
+      border-radius: 8px;
+      padding: 10px 16px;
+    }
+    details.fold { margin-top: 18px; }
+    details.fold summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      font-size: 18px;
+      font-weight: 650;
+    }
+    details.fold summary .note { font-size: 14px; font-weight: 500; }
     main { width: 100%; margin: 0 auto; padding: 28px 20px 96px; }
     h1 { margin: 0 0 4px; font-size: 28px; font-weight: 650; }
+    .brand { display: flex; gap: 16px; align-items: center; }
+    .logo { height: 108px; width: auto; border-radius: 10px; background: #0c2340; }
     .lede { margin: 0 0 20px; color: var(--muted); }
     .panel {
       background: var(--paper);
@@ -63,6 +97,14 @@
       cursor: pointer;
     }
     button.secondary, .linkish { background: #e8eef4; color: var(--ink); }
+    button.bin {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #8a3b12;
+      color: #ffffff;
+    }
+    button.bin:hover { background: #6e2e0e; color: #ffffff; }
     #show-all[aria-pressed="true"] { background: var(--blue); color: white; }
     button:hover, .linkish:hover { background: var(--blue-dark); color: white; }
     .note { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
@@ -113,8 +155,11 @@
       background: var(--paper);
       font-size: 12.5px;
     }
-    table.market-table { table-layout: auto; font-size: 14px; }
+    table.market-table { table-layout: auto; font-size: 14px; margin-top: 4px; }
     table.market-table th, table.market-table td { width: auto; }
+    table.market-table thead th { position: static; top: auto; z-index: auto; white-space: nowrap; }
+    .listing-tools { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin: 8px 0 14px; }
+    #published-postcode { min-width: 9rem; }
     col.c-select { width: 2.2%; }
     col.c-send { width: 2.2%; }
     col.c-image { width: 3.4%; }
@@ -244,13 +289,26 @@
   </style>
 </head>
 <body>
+  <header class="site-banner">
+    <div class="brand">
+      <img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan">
+      <div>
+        <h1>QMS Roof Scan</h1>
+        <p class="lede">Graded roofs from {{ mailout_name }} and {{ quotes_name }}. A lead is included when its repair likelihood meets the threshold, unless you choose Include or Exclude.</p>
+      </div>
+    </div>
+    <a class="admin-link" href="{{ url_for('admin_sales') }}">ADMIN</a>
+  </header>
   <main>
-    <h1>AU Roof Scanner</h1>
-    <p class="lede">Graded roofs from {{ mailout_name }} and {{ quotes_name }}. A lead is included when its repair likelihood meets the threshold, unless you choose Include or Exclude.</p>
     <div class="banner" id="scan-banner" hidden role="status" aria-live="polite">
       <span class="spinner" aria-hidden="true"></span>
-      Currently scanning…
+      <span id="job-text">Working…</span>
     </div>
+    {% for job in jobs.values() %}
+      {% if job.state == "done" or job.state == "error" %}
+        <p class="note">{{ job.message }}</p>
+      {% endif %}
+    {% endfor %}
 
     {% with messages = get_flashed_messages() %}
       {% if messages %}
@@ -264,7 +322,7 @@
 
     <section class="panel" id="marketplace-admin">
       <h2>Marketplace</h2>
-      <p class="note">All prices are exclusive of GST. Published leads appear on the <a href="{{ url_for('marketplace_home') }}">public marketplace</a>. A buyer must take at least {{ marketplace_config.minimum_order }} leads before checkout.</p>
+      <p class="note">All prices are exclusive of GST. Published leads appear on the <a href="{{ url_for('marketplace_home') }}">QMS Roof Scan marketplace</a>. A buyer must take at least {{ marketplace_config.minimum_order }} leads before checkout. <a href="{{ url_for('admin_sales') }}">Sales and invoices</a> lists every paid invoice and can resend it.</p>
       <form class="scan" method="post" action="{{ url_for('marketplace_settings') }}">
         <div>
           <label for="listing-days">Listing length (days)</label>
@@ -300,16 +358,33 @@
         </div>
         <button type="submit">Publish selected</button>
       </form>
-      <p class="note">Tick leads in the table, choose repair/wear or cleaning, and publish. Leave the price blank to use the score table. A manual price replaces the default for this listing.</p>
-      <h3>Live listings</h3>
-      <table class="market-table">
+      <p class="note">Tick leads in the table, or use Select all for every lead the current filters are showing, then choose repair/wear or cleaning and publish. Leave the price blank to use the score table. A manual price replaces the default for this listing.</p>
+      <details class="fold">
+      <summary>Live listings <span id="published-count" class="note"></span></summary>
+      <form id="unpublish-form" method="post" action="{{ url_for('marketplace_unpublish') }}"></form>
+      <div class="listing-tools">
+        <div>
+          <label for="published-postcode">Postcode</label>
+          <select id="published-postcode">
+            <option value="all">All</option>
+            {% for code in live_listings|map(attribute='postcode')|reject('equalto', '')|unique|sort %}
+              <option value="{{ code }}">{{ code }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" form="unpublish-form">Unpublish selected</button>
+      </div>
+      <table class="market-table" id="published-table">
         <thead>
-          <tr><th>Suburb</th><th>Category</th><th>Price ex GST</th><th>Expires</th><th>New price</th></tr>
+          <tr><th><label class="check">Select <input type="checkbox" id="select-all-live" aria-label="Select all live listings in the current list"></label></th><th>Reference</th><th>Suburb</th><th>Postcode</th><th>Category</th><th>Price ex GST</th><th>Expires</th><th>New price</th></tr>
         </thead>
         <tbody>
           {% for row in live_listings %}
-            <tr>
+            <tr data-postcode="{{ row.postcode }}">
+              <td><input form="unpublish-form" type="checkbox" name="lead_id" value="{{ row.lead_id }}" aria-label="Unpublish {{ row.reference }}"></td>
+              <td>{{ row.reference }}</td>
               <td>{{ row.suburb }}</td>
+              <td>{{ row.postcode }}</td>
               <td>{{ row.category_label }}</td>
               <td>{{ row.price_label }}</td>
               <td>{{ row.expires_label }}</td>
@@ -322,10 +397,36 @@
               </td>
             </tr>
           {% else %}
-            <tr><td colspan="5">No live listings.</td></tr>
+            <tr><td colspan="8">No live listings.</td></tr>
           {% endfor %}
         </tbody>
       </table>
+      </details>
+      <details class="fold">
+      <summary>Taken down <span class="note">{{ unpublished_listings|length }}</span></summary>
+      <form method="post" action="{{ url_for('marketplace_relist') }}">
+        <table class="market-table">
+          <thead>
+            <tr><th></th><th>Reference</th><th>Suburb</th><th>Postcode</th><th>Category</th><th>Price ex GST</th></tr>
+          </thead>
+          <tbody>
+            {% for row in unpublished_listings %}
+              <tr>
+                <td><input type="checkbox" name="lead_id" value="{{ row.lead_id }}" aria-label="Re-list {{ row.reference }}"></td>
+                <td>{{ row.reference }}</td>
+                <td>{{ row.suburb }}</td>
+                <td>{{ row.postcode }}</td>
+                <td>{{ row.category_label }}</td>
+                <td>{{ row.price_label }}</td>
+              </tr>
+            {% else %}
+              <tr><td colspan="6">No leads have been taken down.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <button type="submit">Re-list selected</button>
+      </form>
+      </details>
       <h3>Archive list</h3>
       <form method="post" action="{{ url_for('marketplace_relist') }}">
         <table class="market-table">
@@ -357,14 +458,14 @@
     </section>
 
     <section class="panel">
-      <form class="scan" method="post" action="{{ url_for('load_gnaf_route') }}">
+      <form class="scan" id="gnaf-form" method="post" action="{{ url_for('load_gnaf_route') }}">
         <div>
           <label for="gnaf-postcode">Postcode</label>
           <input id="gnaf-postcode" name="postcode" type="text" inputmode="numeric" maxlength="4" required>
         </div>
         <button type="submit">Load addresses</button>
       </form>
-      <p class="note">Reads the local G-NAF extract and writes data/addresses_POSTCODE.csv. No tiles are downloaded.</p>
+      <p class="note">Reads the local G-NAF extract and writes data/addresses_POSTCODE.csv. No tiles are downloaded. Council reserve numbers, strata building records, and rural or very large lots are left out. The page updates when the load finishes.</p>
     </section>
 
     <section class="panel">
@@ -380,6 +481,10 @@
         <label class="check" for="skip-apartments">
           <input id="skip-apartments" name="skip_apartments" type="checkbox" checked>
           Skip apartments / multi-unit buildings
+        </label>
+        <label class="check" for="skip-industrial">
+          <input id="skip-industrial" name="skip_industrial" type="checkbox" checked>
+          Skip industrial addresses
         </label>
         <label class="check" for="entire">
           <input id="entire" name="entire" type="checkbox">
@@ -437,6 +542,12 @@
     <p class="note">Leads are included when repair likelihood is at or above the threshold. Include forces a lead in. Exclude forces it out. Older grades have no repair score until they are graded again. Tick Send, or paste reference numbers, to export a shorter list. A high-res request is saved with the other fields. Google Static Maps is already at maximum zoom 21 and scale 2, so a closer image is not downloaded. Edit the table, then save once.</p>
     <p id="mailout-result" hidden></p>
     <form class="toolbar" method="post" action="{{ url_for('export_contractor') }}">
+      <button type="button" class="bin" id="bin-leads">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M9 3h6l1 2h5v2H3V5h5zm0 6h2v9H9zm4 0h2v9h-2zM6 9h2v9H6z"/>
+        </svg>
+        Bin
+      </button>
       <p id="lead-count" class="lead-count" aria-live="polite">Showing 0 leads</p>
       <div>
         <label for="score-repair-threshold">Repair / Wear threshold</label>
@@ -502,7 +613,7 @@
         </colgroup>
         <thead>
           <tr>
-            <th>Select</th>
+            <th><label class="check">Select <input type="checkbox" id="select-all-leads" aria-label="Select all leads in the current list"></label></th>
             <th>Send</th>
             <th>Image</th>
             <th>Reference</th>
@@ -636,6 +747,7 @@
       <span id="save-status" role="status"></span>
     </div>
   </main>
+  {% include "_footer.html" %}
 
   <dialog id="viewer">
     <img id="viewer-image" alt="Enhanced roof image">
@@ -677,6 +789,32 @@
         viewer.showModal();
       });
     });
+    function visibleLeadBoxes() {
+      return [...document.querySelectorAll("#leads tbody tr[data-owner]")]
+        .filter((row) => !row.hidden)
+        .map((row) => row.querySelector('input[name="lead_id"]'))
+        .filter(Boolean);
+    }
+    function syncSelectAll() {
+      const selectAll = document.getElementById("select-all-leads");
+      if (!selectAll) return;
+      const boxes = visibleLeadBoxes();
+      const checked = boxes.filter((box) => box.checked).length;
+      selectAll.checked = boxes.length > 0 && checked === boxes.length;
+      selectAll.indeterminate = checked > 0 && checked < boxes.length;
+    }
+    const selectAllLeads = document.getElementById("select-all-leads");
+    if (selectAllLeads) {
+      selectAllLeads.addEventListener("change", () => {
+        visibleLeadBoxes().forEach((box) => {
+          box.checked = selectAllLeads.checked;
+        });
+        selectAllLeads.indeterminate = false;
+      });
+      document.querySelectorAll('#leads tbody input[name="lead_id"]').forEach((box) => {
+        box.addEventListener("change", syncSelectAll);
+      });
+    }
     function applyFilters() {
       const owner = document.getElementById("owner-filter").value;
       const postcode = document.getElementById("postcode-filter").value;
@@ -712,6 +850,13 @@
           shown += 1;
         }
       });
+      document.querySelectorAll("#leads tbody tr[data-owner]").forEach((row) => {
+        if (row.hidden) {
+          const box = row.querySelector('input[name="lead_id"]');
+          if (box) box.checked = false;
+        }
+      });
+      syncSelectAll();
       const count = document.getElementById("lead-count");
       const format = (value) => value.toLocaleString("en-AU");
       count.textContent = shown === rows.length
@@ -756,6 +901,27 @@
         return left.dataset.lead.localeCompare(right.dataset.lead);
       });
       rows.forEach((row) => tbody.appendChild(row));
+    });
+    document.getElementById("bin-leads").addEventListener("click", async () => {
+      const boxes = visibleLeadBoxes().filter((box) => box.checked);
+      if (!boxes.length) {
+        window.alert("Select at least one lead.");
+        return;
+      }
+      const count = boxes.length;
+      const records = count === 1 ? "RECORD" : "RECORDS";
+      if (!window.confirm(`YOU ARE ABOUT TO DELETE ${count} ${records}`)) {
+        return;
+      }
+      const body = new FormData();
+      boxes.forEach((box) => body.append("lead_id", box.value));
+      const response = await fetch("{{ url_for('bin_selected') }}", { method: "POST", body });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        showStatus(result.message || "Bin failed.", false);
+        return;
+      }
+      window.location.reload();
     });
     document.getElementById("select-repairable").addEventListener("click", () => {
       document.querySelectorAll(".repairable").forEach((box) => {
@@ -973,13 +1139,63 @@
       prepareMailout(true).catch(() => showStatus("Mailout failed.", false));
     });
     const scanForm = document.getElementById("scan-form");
+    const gnafForm = document.getElementById("gnaf-form");
     const scanBanner = document.getElementById("scan-banner");
+    const jobText = document.getElementById("job-text");
+    const fetchHeaders = { "X-Requested-With": "fetch" };
+    let watching = false;
+    function setJobMessage(message) {
+      jobText.textContent = message;
+      scanBanner.hidden = false;
+    }
     function setScanning(active) {
       scanBanner.hidden = !active;
       scanForm.querySelectorAll("input, button").forEach((control) => {
         control.disabled = active;
       });
+      if (gnafForm) {
+        gnafForm.querySelectorAll("input, button").forEach((control) => {
+          control.disabled = active;
+        });
+      }
     }
+    async function watchJobs() {
+      if (!watching) return;
+      try {
+        const response = await fetch("{{ url_for('jobs') }}", { headers: fetchHeaders });
+        const jobs = await response.json();
+        const running = Object.values(jobs).filter((job) => job.state === "running");
+        if (running.length) {
+          setJobMessage(running[0].message || "Working…");
+          window.setTimeout(watchJobs, 3000);
+          return;
+        }
+        window.location.assign("{{ url_for('home') }}");
+      } catch (error) {
+        window.setTimeout(watchJobs, 5000);
+      }
+    }
+    gnafForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const body = new FormData(gnafForm);
+      setJobMessage("Loading addresses…");
+      setScanning(true);
+      try {
+        const response = await fetch(gnafForm.action, { method: "POST", body, headers: fetchHeaders });
+        const result = await response.json();
+        if (!result.ok) {
+          setScanning(false);
+          window.alert(result.message);
+          return;
+        }
+        setJobMessage(result.message);
+        watching = true;
+        watchJobs();
+      } catch (error) {
+        setScanning(false);
+        window.alert("The address load could not be started.");
+      }
+    });
     scanForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const body = new FormData(scanForm);
@@ -993,18 +1209,83 @@
         return;
       }
       body.set("confirmed", "yes");
+      setJobMessage("Starting the scan…");
       setScanning(true);
       try {
-        const response = await fetch(scanForm.action, { method: "POST", body });
-        if (!response.ok) {
-          throw new Error("Scan failed.");
+        const response = await fetch(scanForm.action, { method: "POST", body, headers: fetchHeaders });
+        const started = await response.json();
+        if (!started.ok) {
+          setScanning(false);
+          window.alert(started.message);
+          return;
         }
-        window.location.assign(response.url || "{{ url_for('home') }}");
+        setJobMessage(started.message);
+        watching = true;
+        watchJobs();
       } catch (error) {
         setScanning(false);
-        window.alert("The scan failed. You can start it again.");
+        window.alert("The scan could not be started. You can start it again.");
       }
     });
+    {% for job in jobs.values() %}
+      {% if job.state == "running" %}
+    watching = true;
+    setJobMessage({{ job.message | tojson }});
+    setScanning(true);
+    watchJobs();
+      {% endif %}
+    {% endfor %}
+    const publishedPostcode = document.getElementById("published-postcode");
+    if (publishedPostcode) {
+      const publishedCount = document.getElementById("published-count");
+      const applyPublished = () => {
+        const chosen = publishedPostcode.value;
+        let shown = 0;
+        document.querySelectorAll("#published-table tbody tr[data-postcode]").forEach((row) => {
+          const show = chosen === "all" || row.dataset.postcode === chosen;
+          row.hidden = !show;
+          if (show) shown += 1;
+          if (!show) {
+            const box = row.querySelector('input[name="lead_id"]');
+            if (box) box.checked = false;
+          }
+        });
+        if (publishedCount) {
+          publishedCount.textContent = chosen === "all"
+            ? String(shown)
+            : `${shown} in ${chosen}`;
+        }
+        syncLiveSelect();
+      };
+      function visibleLiveBoxes() {
+        return [...document.querySelectorAll("#published-table tbody tr[data-postcode]")]
+          .filter((row) => !row.hidden)
+          .map((row) => row.querySelector('input[name="lead_id"]'))
+          .filter(Boolean);
+      }
+      function syncLiveSelect() {
+        const selectAll = document.getElementById("select-all-live");
+        if (!selectAll) return;
+        const boxes = visibleLiveBoxes();
+        const checked = boxes.filter((box) => box.checked).length;
+        selectAll.checked = boxes.length > 0 && checked === boxes.length;
+        selectAll.indeterminate = checked > 0 && checked < boxes.length;
+      }
+      const selectAllLive = document.getElementById("select-all-live");
+      if (selectAllLive) {
+        selectAllLive.addEventListener("change", () => {
+          visibleLiveBoxes().forEach((box) => {
+            box.checked = selectAllLive.checked;
+          });
+          selectAllLive.indeterminate = false;
+        });
+        document.querySelectorAll('#published-table tbody input[name="lead_id"]').forEach((box) => {
+          box.addEventListener("change", syncLiveSelect);
+        });
+      }
+      publishedPostcode.addEventListener("change", applyPublished);
+      applyPublished();
+    }
   </script>
 </body>
 </html>

@@ -17,11 +17,14 @@ data/manual_status.json
 data/owner_flag.json
 data/manual_inputs.json
 data/marketplace_orders.json
+data/marketplace_listings.json
 data/export_settings.json
 data/reference_numbers.json
 data/mailout/
 data/scan_history.json
 data/addresses_*.csv
+data/suburb_points.json
+data/suppressed_properties.json
 .env
 __pycache__/
 .venv/

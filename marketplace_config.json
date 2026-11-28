@@ -1,6 +1,6 @@
 {
   "listing_days": 30,
-  "minimum_order": 10,
+  "minimum_order": 2,
   "repair_prices_ex_gst": {
     "2": 20,
     "3": 40,

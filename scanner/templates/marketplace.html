@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Roof lead marketplace</title>
+  <title>QMS Roof Scan</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <style>
     :root {
@@ -20,6 +20,9 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
       font-family: "Segoe UI", sans-serif;
       color: var(--ink);
       background: var(--page);
@@ -30,26 +33,73 @@
       gap: 16px;
       align-items: center;
       padding: 18px 24px;
-      background: var(--navy);
+      background: #010F34;
       color: #f7f9fb;
     }
-    header h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+    .brand { display: flex; gap: 14px; align-items: center; }
+    .logo { height: 88px; width: auto; border-radius: 10px; }
+    header h1 { margin: 0; font-size: 40px; font-weight: 700; letter-spacing: 0.04em; }
     header p { margin: 4px 0 0; color: #c5d0dc; font-size: 14px; }
     header a { color: #ffffff; font-weight: 650; text-decoration: none; }
     .header-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-    header button { background: #ffffff; color: var(--navy); }
+    header button { background: #ffffff; color: #010F34; }
     header button:disabled { opacity: 0.55; }
-    #minimum-note { color: #f3d2a6; font-size: 13px; font-weight: 650; }
-    .wrap { padding: 20px 24px 40px; }
+    .cart-box { position: relative; }
+    .cart-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      width: min(360px, 86vw);
+      background: #ffffff;
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 12px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+      z-index: 1200;
+    }
+    .cart-menu p { margin: 0 0 8px; }
+    .cart-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
+      font-size: 14px;
+    }
+    .cart-menu button.secondary, .cart-menu a.quiet { font-size: 13px; }
+    .cart-actions { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-top: 10px; }
+    .cart-total { margin: 10px 0 0; font-weight: 800; color: #010F34; }
+    #minimum-note, .hold-note { color: var(--warn); font-size: 13px; font-weight: 650; }
+    .hold-note { color: var(--muted); font-weight: 500; }
+    .wrap { padding: 20px 24px 28px; }
+    .lead-includes {
+      margin: 0 0 16px;
+      padding: 14px 16px 12px;
+      border: 2px solid #010F34;
+      border-radius: 10px;
+      background: #f4f7fb;
+      color: #010F34;
+    }
+    .lead-includes h2 { margin: 0 0 8px; font-size: 18px; font-weight: 800; line-height: 1.3; }
+    .lead-includes ul { margin: 0; padding-left: 20px; font-size: 16px; font-weight: 650; }
+    .lead-includes li { margin: 4px 0; }
+    .lead-includes p { margin: 10px 0 0; font-size: 12px; font-weight: 500; color: var(--muted); }
     .disclaimer {
       background: #fff8ee;
       border: 1px solid #ead7b4;
-      border-radius: 10px;
-      padding: 12px 14px;
-      margin: 0 0 16px;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 18px 0 0;
       color: #5c4318;
-      line-height: 1.45;
+      font-size: 12px;
+      line-height: 1.4;
     }
+    .chooser { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+    .step { margin: 0; font-weight: 650; }
+    .choices { display: flex; flex-wrap: wrap; gap: 8px; }
+    .choice { background: white; color: var(--ink); border: 1px solid #c5d0dc; }
+    .choice.active { background: var(--navy); color: white; border-color: var(--navy); }
     .toolbar {
       display: flex;
       justify-content: space-between;
@@ -58,6 +108,40 @@
       margin-bottom: 14px;
     }
     .toolbar p { margin: 0; color: var(--muted); }
+    #postcode-step { position: relative; z-index: 1100; }
+    .postcode-row { display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; }
+    .manual-postcode {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex: 0 0 auto;
+      border: 1px solid #8aa0b5;
+      border-radius: 8px;
+      padding: 6px;
+      background: #ffffff;
+    }
+    .manual-postcode input { font: inherit; padding: 8px 10px; border: 1px solid #c5ced6; border-radius: 8px; width: 160px; }
+    .available-postcodes { position: relative; flex: 0 0 auto; }
+    #available-postcodes, button.show-all { white-space: nowrap; }
+    .postcode-list {
+      position: absolute;
+      z-index: 2;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 160px;
+      max-height: 240px;
+      overflow: auto;
+      background: #ffffff;
+      border: 1px solid #8aa0b5;
+      border-radius: 8px;
+      padding: 6px 10px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    }
+    .postcode-list label { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: 14px; color: var(--ink); }
+    .postcode-list p { margin: 4px 0; color: var(--muted); font-size: 13px; }
+    #available-postcodes[aria-expanded="true"] { background: #010F34; }
+    button.show-all { background: #010F34; font-weight: 800; }
+    button.show-all:hover { background: #02164a; }
     button, .linkish {
       font: inherit;
       background: var(--blue);
@@ -66,10 +150,11 @@
       border-radius: 8px;
       padding: 9px 14px;
       cursor: pointer;
+      text-decoration: none;
     }
     button.secondary { background: #e8eef4; color: var(--ink); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .stage {
+    .workspace {
       display: grid;
       grid-template-columns: minmax(280px, 0.9fr) minmax(320px, 1.1fr);
       gap: 18px;
@@ -86,18 +171,57 @@
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: var(--navy);
+      background: #010F34;
       border: 2px solid #ffffff;
       box-shadow: 0 2px 6px rgba(27, 40, 56, 0.35);
     }
     .leaflet-div-icon.pin { background: transparent; border: 0; }
-    .pin-active span { background: #c9842a; }
+    .pin-cleaning span { background: #1f8a4c; }
     .lists { display: flex; flex-direction: column; gap: 22px; }
-    section h2 {
-      margin: 0 0 12px;
-      font-size: 13px;
-      letter-spacing: 0.08em;
-      color: var(--navy);
+    .listing-count {
+      margin: 0 0 14px;
+      padding: 12px 14px;
+      border: 2px solid #010F34;
+      border-radius: 10px;
+      background: #f4f7fb;
+    }
+    .listing-count h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      color: #010F34;
+    }
+    .listing-count .count {
+      margin: 4px 0 0;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: 0;
+      color: #1c2430;
+    }
+    .bulk-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .bulk-actions .select-all, .bulk-actions .unselect-all { margin-top: 0; }
+    .unselect-all { background: #e8eef4; color: #1c2430; }
+    article img { cursor: zoom-in; }
+    #roof-view {
+      border: 0;
+      padding: 12px;
+      background: #010F34;
+      max-width: none;
+      max-height: none;
+    }
+    #roof-view img {
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: 92vw;
+      max-height: 86vh;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    #roof-view button {
+      margin: 0 0 8px auto;
+      display: block;
     }
     .grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
     article {
@@ -130,11 +254,21 @@
     .wear-4 { background: #d4651a; }
     .wear-5 { background: #b42318; }
     .empty { margin: 0; color: var(--muted); }
+    .map-hint { margin: 0 0 10px; color: var(--ink); font-size: 15px; font-weight: 650; }
     .short { color: var(--warn); font-weight: 650; }
+    .attribution {
+      margin-top: auto;
+      padding: 8px 16px;
+      background: #010F34;
+      color: #d5dee8;
+      font-size: 11px;
+      line-height: 1.4;
+      text-align: center;
+    }
     @media (max-width: 860px) {
       header, .wrap { padding-left: 16px; padding-right: 16px; }
       header { align-items: flex-start; flex-direction: column; }
-      .stage { grid-template-columns: 1fr; }
+      .workspace { grid-template-columns: 1fr; }
       #map { height: 320px; }
       article { grid-template-columns: 1fr; }
       article img { height: 180px; }
@@ -144,14 +278,28 @@
 </head>
 <body>
   <header>
-    <div>
-      <h1>Roof lead marketplace</h1>
-      <p>Leads for Australian roofers. Prices are exclusive of GST.</p>
+    <div class="brand">
+      <img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan">
+      <div>
+        <h1>QMS ROOF SCAN</h1>
+        <p>Market Intelligence for Contractors</p>
+      </div>
     </div>
     <div class="header-actions">
-      <span id="minimum-note" hidden>Minimum order is {{ minimum_order }} leads.</span>
-      <a href="{{ url_for('marketplace_cart') }}">Cart (<span id="cart-count">0</span>)</a>
-      <a id="checkout-link" href="{{ url_for('marketplace_cart') }}"><button type="button" id="checkout-button" disabled>Checkout</button></a>
+      <div class="cart-box">
+        <button type="button" id="cart-toggle">Cart (<span id="cart-count">0</span>)</button>
+        <div id="cart-menu" class="cart-menu" hidden>
+          <p id="minimum-note" hidden>Minimum order is {{ minimum_order }} leads.</p>
+          <p class="hold-note">The cart is kept for 30 minutes. Remove a lead, or leave it, and it can be claimed again.</p>
+          <div id="cart-items"></div>
+          <p id="cart-total" class="cart-total">CART TOTAL = $0 (ex gst)</p>
+          <div class="cart-actions">
+            <button type="button" class="secondary" id="unselect-cart" hidden>Unselect all</button>
+            <a href="{{ url_for('marketplace_cart') }}">Review cart</a>
+            <button type="button" id="checkout-button" disabled>Checkout</button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
   <div class="wrap">
@@ -160,40 +308,95 @@
         <p class="short">{{ message }}</p>
       {% endfor %}
     {% endwith %}
-    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
-    <div class="toolbar">
-      <p id="filter-label">Select a suburb on the map.</p>
-      <button type="button" id="show-all" class="secondary">Show all</button>
+    <div class="chooser">
+      <p class="step">1. Choose the work</p>
+      <div class="choices">
+        <button type="button" class="choice" id="choose-repair">Repairs</button>
+        <button type="button" class="choice" id="choose-cleaning">Cleaning</button>
+      </div>
+      <div id="material-step" hidden>
+        <p class="step">2. Roof material</p>
+        <div id="material-choices" class="choices"></div>
+      </div>
+      <div id="postcode-step" hidden>
+        <p class="step" id="postcode-step-label">2. Postcodes</p>
+        <div class="postcode-row">
+          <form id="postcode-form" class="manual-postcode">
+            <input id="postcode-query" type="text" inputmode="numeric" placeholder="2233, 2148" aria-label="Postcodes">
+            <button type="submit">MANUAL POSTCODE CHECK</button>
+          </form>
+          <div class="available-postcodes">
+            <button type="button" id="available-postcodes" aria-expanded="false" aria-controls="postcode-list">AVAILABLE POSTCODES</button>
+            <div id="postcode-list" class="postcode-list" hidden></div>
+          </div>
+          <button type="button" id="all-postcodes" class="show-all">SHOW ALL LIVE LISTINGS</button>
+        </div>
+      </div>
+      <p id="filter-label">Choose Repairs or Cleaning.</p>
     </div>
-    <div class="stage">
-      <div id="map" role="region" aria-label="Suburbs with leads"></div>
-      <div class="lists">
-        <section>
-          <h2>REPAIRS</h2>
+    <p class="map-hint">Zoom in on the map and click an individual suburb pin. That shows the listings for that suburb.</p>
+    <p id="pin-note" class="empty" hidden></p>
+    <div class="workspace">
+    <div id="map" role="region" aria-label="New South Wales leads"></div>
+    <div class="lists">
+      <aside class="lead-includes">
+        <h2>Each Purchased Lead sold exclusively and includes:</h2>
+        <ul>
+          <li>Full property address</li>
+          <li>Rooftop image file</li>
+          <li>Complete CSV file for easy export</li>
+        </ul>
+        <p>The above are information forwarded after payment.</p>
+      </aside>
+        <section id="repair-section" hidden>
+          <div class="listing-count">
+            <h2>REPAIR</h2>
+            <p id="repair-count" class="count"></p>
+            <div class="bulk-actions">
+              <button type="button" class="select-all" id="select-all-repair" hidden>Select all</button>
+              <button type="button" class="unselect-all" id="unselect-all-repair" hidden>Unselect all</button>
+            </div>
+          </div>
           <div id="repairs" class="grid"></div>
         </section>
-        <section>
-          <h2>CLEANING</h2>
+        <section id="cleaning-section" hidden>
+          <div class="listing-count">
+            <h2>CLEANING</h2>
+            <p id="cleaning-count" class="count"></p>
+            <div class="bulk-actions">
+              <button type="button" class="select-all" id="select-all-cleaning" hidden>Select all</button>
+              <button type="button" class="unselect-all" id="unselect-all-cleaning" hidden>Unselect all</button>
+            </div>
+          </div>
           <div id="cleaning" class="grid"></div>
         </section>
-      </div>
     </div>
+    </div>
+    <dialog id="roof-view">
+      <button type="button" id="roof-view-close">Close</button>
+      <img id="roof-view-image" alt="" draggable="false">
+    </dialog>
+    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
   </div>
+  {% include "_footer.html" %}
   <script id="lead-data" type="application/json">{{ cards|tojson }}</script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
     const minimum = {{ minimum_order }};
     const storageKey = "au-roof-cart";
+    const holdMs = 30 * 60 * 1000;
+    const checkoutUrl = "{{ url_for('marketplace_checkout') }}";
     const leads = JSON.parse(document.getElementById("lead-data").textContent).map((lead) => ({
       ...lead,
       category: lead.category === "cleaning" ? "cleaning" : "repair",
     }));
-    const map = L.map("map", { scrollWheelZoom: true }).setView([-28.0167, 153.4], 10);
+    const map = L.map("map", { scrollWheelZoom: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 18,
       attribution: "&copy; OpenStreetMap",
     }).addTo(map);
-    const markers = new Map();
+    map.whenReady(() => map.invalidateSize());
+    const markers = [];
 
     function suburbKey(lead) {
       return `${lead.suburb}|${lead.postcode || ""}`;
@@ -201,22 +404,76 @@
     function placeLabel(lead) {
       return lead.postcode ? `${lead.suburb} ${lead.postcode}` : lead.suburb;
     }
+    function pointOf(lead) {
+      const lat = Number(lead.lat);
+      const lon = Number(lead.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+      return [lat, lon];
+    }
     function readCart() {
+      const stamp = Number(localStorage.getItem(storageKey + "-at") || "0");
+      if (!stamp || Date.now() - stamp > holdMs) {
+        localStorage.removeItem(storageKey);
+        localStorage.removeItem(storageKey + "-at");
+        return [];
+      }
       try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); }
       catch (error) { return []; }
     }
     function writeCart(items) {
       localStorage.setItem(storageKey, JSON.stringify(items));
+      if (items.length) localStorage.setItem(storageKey + "-at", String(Date.now()));
+      else localStorage.removeItem(storageKey + "-at");
       renderCart(items);
-      draw(currentKey, showEverything);
+      draw();
+    }
+    function cartDollars(items) {
+      const prices = new Map(leads.map((lead) => [lead.lead_id, Number(lead.price_ex_gst) || 0]));
+      return items.reduce((sum, item) => {
+        const stored = Number(item.amount);
+        if (Number.isFinite(stored)) return sum + stored;
+        if (prices.has(item.id)) return sum + prices.get(item.id);
+        const match = String(item.price || "").match(/\d[\d,]*/);
+        return sum + (match ? Number(match[0].replaceAll(",", "")) : 0);
+      }, 0);
+    }
+    function cartTotalLabel(items) {
+      const amount = cartDollars(items).toLocaleString("en-AU");
+      return `CART TOTAL = $${amount} (ex gst)`;
     }
     function renderCart(items) {
       document.getElementById("cart-count").textContent = String(items.length);
+      document.getElementById("cart-total").textContent = cartTotalLabel(items);
       const note = document.getElementById("minimum-note");
       const button = document.getElementById("checkout-button");
       const short = items.length < minimum;
       note.hidden = items.length === 0 || !short;
       button.disabled = short;
+      document.getElementById("unselect-cart").hidden = items.length === 0;
+      const list = document.getElementById("cart-items");
+      list.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement("p");
+        empty.className = "hold-note";
+        empty.textContent = "Your cart is empty.";
+        list.appendChild(empty);
+        return;
+      }
+      items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "cart-row";
+        const label = document.createElement("span");
+        label.textContent = `${item.suburb || "Lead"}${item.postcode ? " " + item.postcode : ""} · ${item.price || ""}`;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+          writeCart(readCart().filter((entry) => entry.id !== item.id));
+        });
+        row.append(label, remove);
+        list.appendChild(row);
+      });
     }
     function wearClass(score) {
       const number = Number(score);
@@ -232,6 +489,10 @@
       const image = document.createElement("img");
       image.src = "/roof/" + lead.lead_id;
       image.alt = "Satellite view of a roof in " + lead.suburb;
+      image.draggable = false;
+      image.addEventListener("dragstart", (event) => event.preventDefault());
+      image.addEventListener("contextmenu", (event) => event.preventDefault());
+      image.addEventListener("click", () => openRoof(image.src, image.alt));
       const body = document.createElement("div");
       body.className = "body";
       const title = document.createElement("h3");
@@ -263,88 +524,345 @@
       });
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = claimed ? "Claimed" : "Claim Lead";
-      button.disabled = claimed;
+      button.className = claimed ? "secondary" : "";
+      button.textContent = claimed ? "Remove from cart" : "Claim Lead";
       button.addEventListener("click", () => {
-        const items = readCart();
-        if (!items.some((item) => item.id === lead.lead_id)) {
-          items.push({ id: lead.lead_id, suburb: lead.suburb, price: lead.price_label });
-          writeCart(items);
+        const items = readCart().filter((item) => item.id !== lead.lead_id);
+        if (!claimed) {
+          items.push({
+            id: lead.lead_id,
+            suburb: lead.suburb,
+            postcode: lead.postcode || "",
+            price: lead.price_label,
+            amount: Number(lead.price_ex_gst) || 0,
+          });
         }
+        writeCart(items);
       });
       body.append(title, price, facts, button);
       article.append(image, body);
       return article;
     }
-    let currentKey = "";
-    let showEverything = false;
+    let category = "";
+    let material = "all";
+    let postcodes = [];
+    let postcodeReady = false;
+    let suburbFilter = "";
     function visibleLeads() {
-      if (showEverything) return leads;
-      if (!currentKey) return [];
-      return leads.filter((lead) => suburbKey(lead) === currentKey);
+      if (!category || !postcodeReady) return [];
+      return leads.filter((lead) => {
+        if (category === "cleaning" && lead.category !== "cleaning") return false;
+        if (category === "repair" && lead.category === "cleaning") return false;
+        if (category === "repair" && material !== "all" && (lead.material || "") !== material) return false;
+        if (postcodes.length && !postcodes.includes(String(lead.postcode || ""))) return false;
+        if (suburbFilter && (lead.suburb || "") !== suburbFilter) return false;
+        return true;
+      });
     }
-    function draw(key, all) {
-      currentKey = key;
-      showEverything = all;
+    function draw() {
       const chosen = visibleLeads();
       const repairs = document.getElementById("repairs");
       const cleaning = document.getElementById("cleaning");
+      document.getElementById("repair-section").hidden = category !== "repair";
+      document.getElementById("cleaning-section").hidden = category !== "cleaning";
+      const available = mapLeads().length;
+      const countLabel = available === 1 ? "1 Live Listing" : `${available} Live Listings`;
+      document.getElementById("repair-count").textContent = category === "repair" ? countLabel : "";
+      document.getElementById("cleaning-count").textContent = category === "cleaning" ? countLabel : "";
+      const selectable = Boolean(category) && postcodeReady && chosen.length > 0;
+      const claimed = new Set(readCart().map((item) => item.id));
+      const anyClaimed = chosen.some((lead) => claimed.has(lead.lead_id));
+      document.getElementById("select-all-repair").hidden = !(selectable && category === "repair");
+      document.getElementById("select-all-cleaning").hidden = !(selectable && category === "cleaning");
+      document.getElementById("unselect-all-repair").hidden = !(selectable && category === "repair" && anyClaimed);
+      document.getElementById("unselect-all-cleaning").hidden = !(selectable && category === "cleaning" && anyClaimed);
       repairs.replaceChildren();
       cleaning.replaceChildren();
       chosen.filter((lead) => lead.category !== "cleaning").forEach((lead) => repairs.appendChild(card(lead)));
       chosen.filter((lead) => lead.category === "cleaning").forEach((lead) => cleaning.appendChild(card(lead)));
-      if (!repairs.childElementCount) {
+      const host = category === "cleaning" ? cleaning : repairs;
+      if (category && postcodeReady && !host.childElementCount) {
         const note = document.createElement("p");
         note.className = "empty";
-        note.textContent = leads.length ? (chosen.length || all || key ? "No repair leads in this view." : "Select a suburb to see repair leads.") : "No leads are published at the moment.";
-        repairs.appendChild(note);
-      }
-      if (!cleaning.childElementCount) {
-        const note = document.createElement("p");
-        note.className = "empty";
-        note.textContent = leads.length ? (chosen.length || all || key ? "No cleaning leads in this view." : "Select a suburb to see cleaning leads.") : "No leads are published at the moment.";
-        cleaning.appendChild(note);
+        note.textContent = "No published leads match this selection.";
+        host.appendChild(note);
       }
       const label = document.getElementById("filter-label");
-      if (all) label.textContent = "Showing every published suburb.";
-      else if (key) label.textContent = "Showing " + key.replace("|", " ");
-      else label.textContent = leads.length ? "Select a suburb on the map." : "No leads are published at the moment.";
-      markers.forEach((marker, markerKey) => {
-        marker.setIcon(L.divIcon({
-          className: "pin" + (markerKey === key && !all ? " pin-active" : ""),
-          html: "<span></span>",
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
-        }));
+      if (!category) label.textContent = leads.length ? "Choose Repairs or Cleaning." : "No leads are published at the moment.";
+      else if (category === "repair" && !document.getElementById("material-step").hidden && material === "" ) label.textContent = "Choose a roof material, or All.";
+      else if (!postcodeReady) label.textContent = "Enter a postcode, choose from the list, or show all live listings.";
+      else if (suburbFilter) label.textContent = "Showing listings for " + suburbFilter + ".";
+      else if (postcodes.length) label.textContent = "Showing postcodes " + postcodes.join(", ") + ".";
+      else label.textContent = "Showing every published postcode in this selection.";
+      refreshPins();
+    }
+    function mapLeads() {
+      return leads.filter((lead) => {
+        if (category === "cleaning" && lead.category !== "cleaning") return false;
+        if (category === "repair" && lead.category === "cleaning") return false;
+        if (category === "repair" && material && material !== "all" && (lead.material || "") !== material) return false;
+        if (postcodeReady && postcodes.length && !postcodes.includes(String(lead.postcode || ""))) return false;
+        if (suburbFilter && (lead.suburb || "") !== suburbFilter) return false;
+        return true;
       });
     }
-    const groups = new Map();
+    function pinIcon(lead) {
+      const kind = lead.category === "cleaning" ? "pin-cleaning" : "pin-repair";
+      return L.divIcon({ className: "pin " + kind, html: "<span></span>", iconSize: [16, 16], iconAnchor: [8, 8] });
+    }
+    function refreshPins() {
+      const shown = new Set(mapLeads().map((lead) => lead.lead_id));
+      const visible = [];
+      markers.forEach((marker) => {
+        if (!shown.has(marker.leadId)) {
+          if (map.hasLayer(marker)) map.removeLayer(marker);
+          return;
+        }
+        if (!map.hasLayer(marker)) marker.addTo(map);
+        visible.push(marker);
+      });
+      if (!visible.length) return;
+      const bounds = L.latLngBounds(visible.map((marker) => marker.getLatLng()));
+      map.fitBounds(bounds.pad(0.35), { padding: [32, 32], maxZoom: 13, animate: false });
+    }
+    const buckets = new Map();
     leads.forEach((lead) => {
-      const key = suburbKey(lead);
-      const group = groups.get(key) || { lead, count: 0, lat: 0, lon: 0, points: 0 };
-      group.count += 1;
-      if (typeof lead.lat === "number" && typeof lead.lon === "number") {
-        group.lat += lead.lat;
-        group.lon += lead.lon;
-        group.points += 1;
+      const point = pointOf(lead);
+      if (!point) return;
+      const key = point[0].toFixed(5) + "," + point[1].toFixed(5);
+      const bucket = buckets.get(key) || [];
+      bucket.push(lead);
+      buckets.set(key, bucket);
+    });
+    buckets.forEach((bucket, key) => {
+      const [lat, lon] = key.split(",").map(Number);
+      bucket.forEach((lead, index) => {
+        const angle = (2 * Math.PI * index) / bucket.length;
+        const shift = bucket.length === 1 ? 0 : 0.0018;
+        const marker = L.marker([lat + Math.cos(angle) * shift, lon + Math.sin(angle) * shift], {
+          icon: pinIcon(lead),
+        }).addTo(map);
+        marker.suburbKey = suburbKey(lead);
+        marker.leadId = lead.lead_id;
+        marker.bindTooltip(`${placeLabel(lead)} · ${lead.category_label} · Wear ${lead.wear_score} · ${lead.price_label}`);
+        marker.on("click", () => {
+          if (!category || (category === "repair" && material === "")) return;
+          suburbFilter = lead.suburb || "";
+          postcodes = lead.postcode ? [String(lead.postcode)] : [];
+          document.getElementById("postcode-query").value = postcodes.join(", ");
+          postcodeReady = true;
+          syncListedChecks();
+          document.getElementById("postcode-step").hidden = false;
+          draw();
+        });
+        markers.push(marker);
+      });
+    });
+    function showLivePins() {
+      if (!markers.length) {
+        map.fitBounds([[-37.55, 141.0], [-28.15, 153.64]], { padding: [12, 12], animate: false });
+        return;
       }
-      groups.set(key, group);
+      const bounds = L.latLngBounds(markers.map((marker) => marker.getLatLng()));
+      map.fitBounds(bounds.pad(0.35), { padding: [32, 32], maxZoom: 13, animate: false });
+    }
+    showLivePins();
+    map.whenReady(() => {
+      map.invalidateSize();
+      showLivePins();
     });
-    groups.forEach((group, key) => {
-      if (!group.points) return;
-      const marker = L.marker([group.lat / group.points, group.lon / group.points], {
-        icon: L.divIcon({ className: "pin", html: "<span></span>", iconSize: [16, 16], iconAnchor: [8, 8] }),
-      }).addTo(map);
-      marker.bindTooltip(`${placeLabel(group.lead)} · ${group.count} lead${group.count === 1 ? "" : "s"}`);
-      marker.on("click", () => draw(key, false));
-      markers.set(key, marker);
+    const unpinned = leads.filter((lead) => !pointOf(lead)).length;
+    if (unpinned) {
+      const note = document.getElementById("pin-note");
+      note.hidden = false;
+      note.textContent = unpinned === 1
+        ? "1 published lead has no map coordinate, so it has no pin. Choose Show all live listings to see it."
+        : `${unpinned} published leads have no map coordinate, so they have no pin. Choose Show all live listings to see them.`;
+    }
+    function materialNames() {
+      const names = new Set();
+      leads.filter((lead) => lead.category !== "cleaning").forEach((lead) => {
+        if (lead.material && lead.material !== "Not recorded") names.add(lead.material);
+      });
+      return [...names].sort();
+    }
+    function showPostcodeStep() {
+      document.getElementById("postcode-step").hidden = false;
+      document.getElementById("postcode-step-label").textContent = category === "repair" ? "3. Postcodes" : "2. Postcodes";
+    }
+    function chooseCategory(next) {
+      category = next;
+      material = next === "repair" ? "" : "all";
+      postcodeReady = false;
+      postcodes = [];
+      suburbFilter = "";
+      document.getElementById("postcode-query").value = "";
+      closePostcodeList();
+      document.getElementById("choose-repair").classList.toggle("active", next === "repair");
+      document.getElementById("choose-cleaning").classList.toggle("active", next === "cleaning");
+      const materialStep = document.getElementById("material-step");
+      materialStep.hidden = next !== "repair";
+      document.getElementById("postcode-step").hidden = next !== "cleaning";
+      if (next === "cleaning") showPostcodeStep();
+      if (next === "repair") {
+        const box = document.getElementById("material-choices");
+        box.replaceChildren();
+        ["All", ...materialNames()].forEach((name) => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "choice";
+          button.textContent = name;
+          button.addEventListener("click", () => {
+            material = name === "All" ? "all" : name;
+            [...box.children].forEach((item) => item.classList.toggle("active", item === button));
+            closePostcodeList();
+            showPostcodeStep();
+            draw();
+          });
+          box.appendChild(button);
+        });
+      }
+      draw();
+    }
+    function openRoof(src, alt) {
+      const dialog = document.getElementById("roof-view");
+      const image = document.getElementById("roof-view-image");
+      image.src = src;
+      image.alt = alt;
+      if (!dialog.open) dialog.showModal();
+    }
+    function claimVisible() {
+      const items = readCart();
+      const seen = new Set(items.map((item) => item.id));
+      visibleLeads().forEach((lead) => {
+        if (seen.has(lead.lead_id)) return;
+        seen.add(lead.lead_id);
+        items.push({
+          id: lead.lead_id,
+          suburb: lead.suburb,
+          postcode: lead.postcode || "",
+          price: lead.price_label,
+          amount: Number(lead.price_ex_gst) || 0,
+        });
+      });
+      writeCart(items);
+    }
+    function releaseVisible() {
+      const visible = new Set(visibleLeads().map((lead) => lead.lead_id));
+      writeCart(readCart().filter((item) => !visible.has(item.id)));
+    }
+    document.querySelectorAll(".select-all").forEach((button) => {
+      button.addEventListener("click", claimVisible);
     });
-    document.getElementById("show-all").addEventListener("click", () => draw("", true));
-    document.getElementById("checkout-link").addEventListener("click", (event) => {
-      if (readCart().length < minimum) event.preventDefault();
+    document.querySelectorAll(".unselect-all").forEach((button) => {
+      button.addEventListener("click", releaseVisible);
+    });
+    document.getElementById("unselect-cart").addEventListener("click", () => writeCart([]));
+    const roofView = document.getElementById("roof-view");
+    roofView.addEventListener("contextmenu", (event) => event.preventDefault());
+    document.getElementById("roof-view-close").addEventListener("click", () => roofView.close());
+    document.getElementById("roof-view-image").addEventListener("contextmenu", (event) => event.preventDefault());
+    document.getElementById("roof-view-image").addEventListener("dragstart", (event) => event.preventDefault());
+    document.getElementById("choose-repair").addEventListener("click", () => chooseCategory("repair"));
+    document.getElementById("choose-cleaning").addEventListener("click", () => chooseCategory("cleaning"));
+    function availableCodes() {
+      const codes = new Set();
+      leads.forEach((lead) => {
+        if (category === "cleaning" && lead.category !== "cleaning") return;
+        if (category === "repair" && lead.category === "cleaning") return;
+        if (category === "repair" && material && material !== "all" && (lead.material || "") !== material) return;
+        const code = String(lead.postcode || "");
+        if (/^\d{4}$/.test(code)) codes.add(code);
+      });
+      return [...codes].sort((left, right) => Number(left) - Number(right));
+    }
+    function closePostcodeList() {
+      const list = document.getElementById("postcode-list");
+      const button = document.getElementById("available-postcodes");
+      list.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+    }
+    function syncListedChecks() {
+      document.querySelectorAll("#postcode-list input").forEach((box) => {
+        box.checked = postcodes.includes(box.value);
+      });
+    }
+    function applyListedPostcodes() {
+      suburbFilter = "";
+      postcodes = [...document.querySelectorAll("#postcode-list input:checked")].map((box) => box.value);
+      document.getElementById("postcode-query").value = postcodes.join(", ");
+      postcodeReady = postcodes.length > 0;
+      draw();
+    }
+    function renderPostcodeList() {
+      const list = document.getElementById("postcode-list");
+      const codes = availableCodes();
+      list.replaceChildren();
+      if (!codes.length) {
+        const empty = document.createElement("p");
+        empty.textContent = "No postcodes in this selection.";
+        list.appendChild(empty);
+        return;
+      }
+      codes.forEach((code) => {
+        const label = document.createElement("label");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.value = code;
+        box.checked = postcodes.includes(code);
+        box.addEventListener("change", applyListedPostcodes);
+        label.append(box, document.createTextNode(code));
+        list.appendChild(label);
+      });
+    }
+    document.getElementById("available-postcodes").addEventListener("click", () => {
+      const list = document.getElementById("postcode-list");
+      const opening = list.hidden;
+      if (opening) renderPostcodeList();
+      list.hidden = !opening;
+      document.getElementById("available-postcodes").setAttribute("aria-expanded", opening ? "true" : "false");
+    });
+    document.getElementById("all-postcodes").addEventListener("click", () => {
+      suburbFilter = "";
+      postcodes = [];
+      document.getElementById("postcode-query").value = "";
+      postcodeReady = true;
+      syncListedChecks();
+      draw();
+    });
+    document.getElementById("postcode-form").addEventListener("submit", (event) => {
+      event.preventDefault();
+      suburbFilter = "";
+      const codes = document.getElementById("postcode-query").value.split(/[^0-9]+/).filter((code) => code.length === 4);
+      postcodes = [...new Set(codes)].sort((left, right) => Number(left) - Number(right));
+      if (!postcodes.length) {
+        document.getElementById("filter-label").textContent = "Enter one or more four-digit postcodes.";
+        return;
+      }
+      postcodeReady = true;
+      syncListedChecks();
+      draw();
+    });
+    document.getElementById("cart-toggle").addEventListener("click", () => {
+      const menu = document.getElementById("cart-menu");
+      menu.hidden = !menu.hidden;
+    });
+    document.getElementById("checkout-button").addEventListener("click", () => {
+      const items = readCart();
+      if (items.length < minimum) return;
+      const params = new URLSearchParams();
+      items.forEach((item) => params.append("lead_id", item.id));
+      window.location = checkoutUrl + "?" + params.toString();
     });
     renderCart(readCart());
-    draw("", false);
+    draw();
+    window.setInterval(() => {
+      const items = readCart();
+      if (items.length !== Number(document.getElementById("cart-count").textContent)) {
+        renderCart(items);
+        draw();
+      }
+    }, 60000);
   </script>
 </body>
 </html>

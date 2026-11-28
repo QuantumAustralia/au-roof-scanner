@@ -3,16 +3,18 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cart</title>
+  <title>Cart · QMS Roof Scan</title>
   <style>
-    :root { color-scheme: light; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; --warn: #8a3b12; }
+    :root { color-scheme: light; --navy: #1b2838; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; --warn: #8a3b12; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
-    header { padding: 16px 20px; background: var(--paper); border-bottom: 1px solid var(--line); }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+    header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px 20px; background: #010F34; color: #f7f9fb; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .logo { height: 72px; width: auto; border-radius: 8px; }
     h1 { margin: 0; font-size: 26px; }
-    a { color: var(--blue); }
-    .wrap { padding: 16px 20px 40px; max-width: 980px; }
-    .disclaimer { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 12px 14px; color: #5c3b12; }
+    header a { color: #ffffff; }
+    .wrap { padding: 16px 20px 28px; max-width: 980px; }
+    .disclaimer { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 8px 10px; margin: 18px 0 0; color: #5c3b12; font-size: 12px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
     article { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
     img { width: 100%; height: 200px; object-fit: cover; background: #d9e1ea; display: block; }
@@ -22,66 +24,105 @@
     button.secondary { background: #e8eef4; color: var(--ink); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
     .short { color: var(--warn); font-weight: 650; }
+    .cart-total { margin: 16px 0; font-size: 20px; font-weight: 800; color: #010F34; }
+    .muted { color: var(--muted); }
+    .attribution { margin-top: auto; padding: 8px 16px; background: #010F34; color: #d5dee8; font-size: 11px; line-height: 1.4; text-align: center; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Cart</h1>
+    <div class="brand"><img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan"><h1>QMS Roof Scan</h1></div>
     <a href="{{ url_for('marketplace_home') }}">Back to the marketplace</a>
   </header>
   <div class="wrap">
     <p id="minimum-note" class="short" hidden>Minimum order is {{ minimum_order }} leads.</p>
+    <p class="muted">The cart is kept for 30 minutes. Remove a lead here and it returns to the marketplace. A lead is taken off the marketplace only after payment.</p>
     <div id="grid" class="grid"></div>
+    <p id="empty" class="muted" hidden>Your cart is empty.</p>
+    <p id="cart-total" class="cart-total">CART TOTAL = $0 (ex gst)</p>
     <p>
+      <button type="button" class="secondary" id="unselect-all" hidden>Unselect all</button>
       <button type="button" id="checkout" disabled>Continue to checkout</button>
     </p>
+    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
   </div>
+  {% include "_footer.html" %}
   <script>
     const minimum = {{ minimum_order }};
     const catalog = {{ cards|tojson }};
     const storageKey = "au-roof-cart";
+    const holdMs = 30 * 60 * 1000;
     const byId = Object.fromEntries(catalog.map((card) => [card.lead_id, card]));
     function readCart() {
+      const stamp = Number(localStorage.getItem(storageKey + "-at") || "0");
+      if (!stamp || Date.now() - stamp > holdMs) {
+        localStorage.removeItem(storageKey);
+        localStorage.removeItem(storageKey + "-at");
+        return [];
+      }
       try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); }
       catch (error) { return []; }
     }
     function writeCart(items) {
       localStorage.setItem(storageKey, JSON.stringify(items));
+      if (items.length) localStorage.setItem(storageKey + "-at", String(Date.now()));
+      else localStorage.removeItem(storageKey + "-at");
       draw(items);
     }
+    function cartDollars(items) {
+      return items.reduce((sum, item) => {
+        const card = byId[item.id];
+        if (card) return sum + (Number(card.price_ex_gst) || 0);
+        const stored = Number(item.amount);
+        if (Number.isFinite(stored)) return sum + stored;
+        const match = String(item.price || "").match(/\d[\d,]*/);
+        return sum + (match ? Number(match[0].replaceAll(",", "")) : 0);
+      }, 0);
+    }
     function draw(items) {
+      const amount = cartDollars(items).toLocaleString("en-AU");
+      document.getElementById("cart-total").textContent = `CART TOTAL = $${amount} (ex gst)`;
       const grid = document.getElementById("grid");
-      grid.innerHTML = "";
+      grid.replaceChildren();
       items.forEach((item) => {
         const card = byId[item.id];
-        if (!card) return;
         const article = document.createElement("article");
-        article.innerHTML = `
-          <img alt="">
-          <div class="body">
-            <h2 class="suburb"></h2>
-            <p></p>
-            <p></p>
-            <button type="button" class="secondary">Remove</button>
-          </div>`;
-        const image = article.querySelector("img");
-        image.src = "/roof/" + card.lead_id;
-        image.alt = "Satellite view of a roof in " + card.suburb;
-        article.querySelector("h2").textContent = card.suburb;
-        article.querySelectorAll("p")[0].textContent = card.price_label;
-        article.querySelectorAll("p")[1].textContent = `${card.category_label} · Wear ${card.wear_score}`;
-        article.querySelector("button").addEventListener("click", () => {
-          writeCart(readCart().filter((entry) => entry.id !== card.lead_id));
+        const body = document.createElement("div");
+        body.className = "body";
+        if (card) {
+          const image = document.createElement("img");
+          image.src = "/roof/" + card.lead_id;
+          image.alt = "Satellite view of a roof in " + card.suburb;
+          article.appendChild(image);
+        }
+        const title = document.createElement("h2");
+        title.className = "suburb";
+        title.textContent = card ? (card.postcode ? `${card.suburb} ${card.postcode}` : card.suburb) : (item.suburb || "Lead");
+        const price = document.createElement("p");
+        price.textContent = card ? card.price_label : (item.price || "");
+        const meta = document.createElement("p");
+        meta.textContent = card ? `${card.category_label} · Wear ${card.wear_score}` : "This lead is no longer available.";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "secondary";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+          writeCart(readCart().filter((entry) => entry.id !== item.id));
         });
+        body.append(title, price, meta, remove);
+        article.appendChild(body);
         grid.appendChild(article);
       });
-      const kept = items.filter((item) => byId[item.id]);
+      const available = items.filter((item) => byId[item.id]);
+      document.getElementById("empty").hidden = items.length > 0;
+      document.getElementById("unselect-all").hidden = items.length === 0;
       const note = document.getElementById("minimum-note");
       const button = document.getElementById("checkout");
-      const short = kept.length < minimum;
-      note.hidden = kept.length === 0 || !short;
+      const short = available.length < minimum;
+      note.hidden = available.length === 0 || !short;
       button.disabled = short;
     }
+    document.getElementById("unselect-all").addEventListener("click", () => writeCart([]));
     document.getElementById("checkout").addEventListener("click", () => {
       const ids = readCart().map((item) => item.id).filter((id) => byId[id]);
       if (ids.length < minimum) return;

@@ -45,12 +45,41 @@ PrimaryDefect = Literal[
     "other",
 ]
 FalsePositiveCause = Literal["none", "trees", "solar", "skylights", "tanks", "other"]
+CentreContent = Literal[
+    "residential_roof",
+    "vacant_or_construction",
+    "road",
+    "lawn_driveway_or_pool",
+    "trees",
+    "not_residential",
+    "not_assessable",
+]
+_CENTRE_REASONS = {
+    "vacant_or_construction": "The image is centred on vacant land or a construction site, not a house roof.",
+    "road": "The image is centred on a road or intersection, not a house roof.",
+    "lawn_driveway_or_pool": "The image is centred on a lawn, driveway, or pool, not a house roof.",
+    "trees": "Trees cover the roof, so it cannot be assessed.",
+    "not_residential": "The building is not a residential house roof.",
+    "not_assessable": "The house roof is not visible enough to assess.",
+}
 
 
 _EMPTY_REASONS = {"", "none", "n/a", "na", "-", "null", "nil"}
 
 
 class Pass1Result(BaseModel):
+    centre: CentreContent = Field(
+        description=(
+            "What the crosshair in the centre of the image sits on. "
+            "residential_roof only when a house roof surface is under the crosshair. "
+            "Use vacant_or_construction for vacant land, a slab, or a site with no roof. "
+            "Use road for a road, intersection, roundabout, or car park. "
+            "Use lawn_driveway_or_pool for a lawn, driveway, garden, or pool. "
+            "Use trees when canopy hides the roof. "
+            "Use not_residential for a shop, warehouse, crane, reserve, oval, or other non-house. "
+            "Use not_assessable when the roof cannot be scored for another reason."
+        )
+    )
     roof_visible: bool = Field(
         description=(
             "True only when the target residential roof is in frame and its surface "
@@ -109,8 +138,15 @@ class Pass1Result(BaseModel):
         reason = self.rejection_reason.strip()
         if reason.lower() in _EMPTY_REASONS:
             reason = ""
+        if self.centre != "residential_roof":
+            self.roof_visible = False
+            if not reason:
+                reason = _CENTRE_REASONS.get(self.centre, _CENTRE_REASONS["not_assessable"])
         if self.roof_visible and not reason:
             self.rejection_reason = ""
+            # Heavy moss across the roof is saleable wear. Light soiling stays at 1 or 2.
+            if self._moss_covers_roof() and self.visual_wear < 3:
+                self.visual_wear = 3
             return self
         self.roof_visible = False
         self.visual_wear = 1
@@ -125,6 +161,15 @@ class Pass1Result(BaseModel):
         self.rejection_reason = reason
         self.observation = reason
         return self
+
+    def _moss_covers_roof(self) -> bool:
+        """Heavy moss across the tiles, not a light stain or ordinary dirt."""
+        if self.cleaning_score < 3:
+            return False
+        if self.primary_cleaning_defect == "heavy_moss_lichen" or self.primary_defect == "biological_growth":
+            return True
+        text = f"{self.observation} {self.secondary_defect}".casefold()
+        return "moss" in text or "lichen" in text
 
 
 class Pass2Result(BaseModel):
@@ -161,16 +206,22 @@ def _as_unit_interval(value: object) -> float:
 
 _PASS1_PROMPT = """You assess a nadir aerial or satellite image of one residential roof in Australia. State imagery is sharp enough to show individual tiles, ridge lines, and small patches of rust. Look closely before you score anything.
 
-Visibility check, before any wear or repair score. This check is mandatory.
-Set roof_visible to false when the target residential roof is not actually visible and reasonably assessable. That includes:
-- the image is centred on a road, footpath, verge, driveway, or car park
-- a roof appears only as a sliver at the edge, or the target roof is out of frame
-- trees or canopy hide the roof
-- the land is vacant
-- the building is commercial, industrial, or otherwise not a single residential roof
-- blur, cloud, or shade means the roof surface cannot be assessed
+First, set centre to what the crosshair in the middle of the image sits on. This decides whether the image can be scored at all.
+- residential_roof: the crosshair is on a house roof and the roof surface can be seen. A clean roof with nothing wrong is still residential_roof.
+- vacant_or_construction: vacant land, a concrete slab, a building site, or a block with no house roof
+- road: a road, intersection, roundabout, footpath, verge, or car park
+- lawn_driveway_or_pool: a lawn, driveway, garden, or pool, even when a house is elsewhere in the frame
+- trees: tree canopy covers the roof
+- not_residential: a shop, warehouse, commercial building, crane, sports ground, oval, or reserve
+- not_assessable: only a sliver of roof, the roof is out of frame, or blur, cloud, or shade hides the surface
 
-When roof_visible is false, you must set visual_wear to 1, repair_likelihood to 1, cleaning_score to 1, material to unclear, primary_defect to none_or_cosmetic, and primary_cleaning_defect to none. Write rejection_reason as one short sentence in Australian spelling that names why the image cannot be scored. A person will copy that sentence into notes. Put the same sentence in observation. Do not describe damage, and do not give a score of 3 or higher.
+Do not choose residential_roof unless you can see house roofing under the crosshair. A photo of land, a road, a lawn, a pool, trees, or a non-residential site is not a wear score of 1.
+
+Set roof_visible to true only when centre is residential_roof. Otherwise set roof_visible to false.
+
+A wear score of 1 and a cleaning score of 1 means a visible house roof with nothing to report. Do not use 1 and 1 for a photo that cannot be assessed.
+
+When roof_visible is false, you must set visual_wear to 1, repair_likelihood to 1, cleaning_score to 1, material to unclear, primary_defect to none_or_cosmetic, and primary_cleaning_defect to none. Write rejection_reason as one short sentence in Australian spelling that names why the image cannot be scored, such as vacant land, road centre, lawn, driveway, or trees covering the roof. A person will copy that sentence into notes. Put the same sentence in observation. Do not describe damage, and do not give a score of 3 or higher.
 
 When roof_visible is true, rejection_reason must be an empty string. Then score the target roof as follows.
 
@@ -194,7 +245,8 @@ Use unclear only when roof_visible is false.
 
 visual_wear is structural wear only, from 1 to 5. Dirt, algae, light moss, and ordinary soiling are cleaning issues, not wear.
 Set visual_wear to 4 or 5 only when the close inspection shows clear damage: missing or broken tiles, open ridges, rust that has perforated the sheet, moss that is lifting tiles, peeling coating that exposes the substrate, failed flashing, or obvious sagging.
-If the roof only looks aged, dirty, or stained, set visual_wear to 1 or 2.
+If the roof only looks aged, dirty, or lightly stained, set visual_wear to 1 or 2.
+Heavy moss that covers the roof is different. When that moss is clearly visible across the tiles and cleaning_score is 3 or more, set visual_wear to at least 3. Do not leave that roof at 2.
 When one of the details above is visible, name that defect. Do not call visible tile, rust, coating, flashing, or sagging damage "general ageing".
 Solar panels are a regular grid of dark rectangles. Scattered pale spots on a dark roof are not solar panels.
 If two of those defects are visible, set primary_defect to the more important one and secondary_defect to the other. Use a short label such as "Missing tiles", "Rust", "Heavy moss", "Faded coating", "Cracked flashing", or "Sagging". If only one is visible, secondary_defect must be none. Do not invent a second defect.
@@ -210,10 +262,11 @@ Do not set repair_likelihood to 3 or more for fading, light moss, colour variati
 Cleaning is a separate score from wear and repair. Moss, lichen, algae, dirt, grime, and other organic growth belong here even when the roof is structurally sound.
 cleaning_score is 1 to 5:
 1 no cleaning issue
-2 a light stain or scattered specks a cleaner would not quote
-3 a quoteable clean: obvious moss, algae, or grime
+2 only a light stain or a few scattered specks a cleaner would not quote
+3 a quoteable clean: obvious moss, algae, or grime on the tiles
 4 heavy cover over much of the roof
 5 the surface is largely covered
+Heavy moss that is clearly visible across the tiles is at least 3. Do not score that roof as 2.
 primary_cleaning_defect is one of heavy_moss_lichen, algae_staining, dirt_grime_soiling, organic_growth, or none.
 Use none when cleaning_score is 1. Do not use a cleaning defect as the repair primary_defect unless the growth is lifting tiles, opening laps, or exposing the substrate.
 
@@ -241,6 +294,7 @@ Look again at the target roof for individual broken or missing tiles, rust along
 
 Decide whether the finding is a real quoteable defect on the target roof, or a false positive.
 Fading, light moss, colour variation, and general age are not quoteable defects. If that is all you can see, set false_positive true and verified_defect to none.
+Heavy moss covering the roof is a real finding. Do not mark that roof as a false positive.
 
 Reject these false positives: tree canopy or tree shadow (trees), solar panels (solar), skylights, rainwater tanks (tanks). Solar panels are a regular grid of dark rectangles. Scattered pale spots on a dark roof are not solar panels; if they are lichen, moss, or a failed coating, name that defect. Use other for a different non-defect, or none when the defect is real.
 

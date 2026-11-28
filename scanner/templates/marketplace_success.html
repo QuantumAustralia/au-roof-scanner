@@ -3,20 +3,29 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Payment received</title>
+  <title>Payment received · QMS Roof Scan</title>
   <style>
-    body { margin: 0; font-family: "Segoe UI", sans-serif; color: #1c2430; background: #f3f5f8; }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; font-family: "Segoe UI", sans-serif; color: #1c2430; background: #f3f5f8; }
+    header { padding: 16px 20px; background: #010F34; color: #f7f9fb; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .logo { height: 72px; width: auto; border-radius: 8px; }
+    h1 { margin: 0; font-size: 26px; }
     main { max-width: 760px; margin: 0 auto; padding: 28px 20px; }
-    h1 { font-size: 26px; }
     li { margin-bottom: 12px; }
     .note { color: #5c6b7a; }
+    a { color: #1f4e79; }
+    .attribution { margin-top: auto; padding: 8px 16px; background: #010F34; color: #d5dee8; font-size: 11px; line-height: 1.4; text-align: center; }
   </style>
 </head>
 <body>
+  <header><div class="brand"><img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan"><h1>QMS Roof Scan</h1></div></header>
   <main>
-    <h1>Payment received</h1>
+    <h2>Payment received</h2>
     <p>{{ message }}</p>
-    <p class="note">Every amount below is exclusive of GST.</p>
+    {% if reference %}
+      <p>Invoice {{ reference }}</p>
+    {% endif %}
+    <p class="note">Every amount below is exclusive of GST. Street addresses are in the invoice email, not on this page.</p>
     <ul>
       {% for item in details %}
         <li>
@@ -27,6 +36,8 @@
     </ul>
     <p><a href="{{ url_for('marketplace_home') }}">Back to the marketplace</a></p>
   </main>
-  <script>localStorage.removeItem("au-roof-cart");</script>
+  {% if data_notice %}<p class="disclaimer">{{ data_notice }}</p>{% endif %}
+  {% include "_footer.html" %}
+  <script>localStorage.removeItem("au-roof-cart"); localStorage.removeItem("au-roof-cart-at");</script>
 </body>
 </html>

@@ -45,8 +45,9 @@ def write_clusters(leads: list[dict[str, object]], *, kind: str) -> list[Path]:
         by_suburb.setdefault(str(lead.get("suburb") or ""), []).append(lead)
     folders: list[Path] = []
     sequence: dict[str, int] = {}
+    owners: dict[str, str] = {}
     for suburb in sorted(by_suburb, key=lambda name: (suburb_prefix(name), name.lower())):
-        prefix = suburb_prefix(suburb)
+        prefix = claim_prefix(suburb, owners)
         for group in build_clusters(by_suburb[suburb]):
             sequence[prefix] = sequence.get(prefix, 0) + 1
             label = f"{prefix}-{sequence[prefix]:02d}-{kind}"
@@ -64,11 +65,7 @@ def write_clusters(leads: list[dict[str, object]], *, kind: str) -> list[Path]:
 
 def suburb_prefix(suburb: str) -> str:
     """Same short suburb code used on lead references, such as BRO or ENG."""
-    words = [
-        word
-        for word in re.findall(r"[A-Za-z]+", suburb or "")
-        if word.lower() not in {"the", "of"}
-    ]
+    words = _suburb_words(suburb)
     if not words:
         return "RF"
     if len(words) == 1:
@@ -77,6 +74,57 @@ def suburb_prefix(suburb: str) -> str:
         prefix = "".join(word[0] for word in words[:4]).upper()
     prefix = re.sub(r"[^A-Z]", "", prefix)[:4]
     return prefix or "RF"
+
+
+def claim_prefix(suburb: str, owners: dict[str, str]) -> str:
+    """Give this suburb a code that no other suburb already owns.
+
+    Alfords Point keeps AP. Arndell Park, which would otherwise also be AP,
+    receives ARP so the two areas do not share a numbering sequence.
+    """
+    base = suburb_prefix(suburb)
+    owner = owners.get(base)
+    if owner is None or owner.casefold() == suburb.casefold():
+        owners[base] = suburb
+        return base
+    for candidate in _longer_prefixes(suburb):
+        current = owners.get(candidate)
+        if current is None or current.casefold() == suburb.casefold():
+            owners[candidate] = suburb
+            return candidate
+    owners[base] = suburb
+    return base
+
+
+def _suburb_words(suburb: str) -> list[str]:
+    return [
+        word
+        for word in re.findall(r"[A-Za-z]+", suburb or "")
+        if word.lower() not in {"the", "of"}
+    ]
+
+
+def _longer_prefixes(suburb: str) -> list[str]:
+    """Longer codes tried after the short one is taken by another suburb."""
+    words = _suburb_words(suburb)
+    raw: list[str] = []
+    if len(words) >= 2:
+        raw.extend(
+            (
+                words[0][:2] + words[1][:1],
+                words[0][:3] + words[1][:1],
+                words[0][:2] + words[1][:2],
+                words[0][:4] + words[1][:1],
+            )
+        )
+    elif words:
+        raw.append(words[0][:4])
+    found: list[str] = []
+    for item in raw:
+        prefix = re.sub(r"[^A-Za-z]", "", item).upper()[:4]
+        if len(prefix) >= 3 and prefix not in found:
+            found.append(prefix)
+    return found
 
 
 def _clear_cluster_folders(kind: str) -> None:

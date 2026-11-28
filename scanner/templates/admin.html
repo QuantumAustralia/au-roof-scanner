@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales and invoices · QMS Roof Scan</title>
+  <style>
+    :root { color-scheme: light; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+    header { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 18px 20px; background: #010F34; color: #f7f9fb; }
+    .brand { display: flex; gap: 14px; align-items: center; }
+    .logo { height: 72px; width: auto; border-radius: 8px; }
+    h1 { margin: 0; font-size: 28px; letter-spacing: 0.04em; }
+    header p { margin: 4px 0 0; color: #c5d0dc; }
+    header a { color: #fff; }
+    main { width: min(1100px, calc(100% - 32px)); margin: 0 auto; padding: 24px 0 40px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 16px 0; }
+    .stat { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+    .stat span { display: block; color: var(--muted); font-size: 13px; }
+    .stat strong { font-size: 22px; }
+    form.filters, form.resend { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+    label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+    input, select { font: inherit; padding: 8px 10px; border: 1px solid #c5ced6; border-radius: 6px; background: white; }
+    button { font: inherit; background: var(--blue); color: white; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; background: var(--paper); }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; font-size: 14px; }
+    .note, .warn { color: var(--muted); }
+    .warn { color: #8a3b12; }
+    .flash { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 10px 12px; }
+    h2 { margin: 28px 0 8px; font-size: 20px; }
+    td a { color: var(--blue); font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan">
+      <div>
+        <h1>QMS ROOF SCAN</h1>
+        <p>Sales and invoices</p>
+      </div>
+    </div>
+    <a href="{{ url_for('home') }}">Dashboard</a>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}
+        <p class="flash">{{ message }}</p>
+      {% endfor %}
+    {% endwith %}
+    {% if not email_ready %}
+      <p class="warn">Invoice email is not configured, so nothing can be sent yet. Add SMTP_HOST, SMTP_USER, SMTP_PASSWORD and SMTP_FROM to the server .env, then use Re-issue.</p>
+    {% endif %}
+    <form class="filters" method="get" action="{{ url_for('admin_sales') }}">
+      <div>
+        <label for="from">From</label>
+        <input id="from" name="from" type="date" value="{{ start }}">
+      </div>
+      <div>
+        <label for="to">To</label>
+        <input id="to" name="to" type="date" value="{{ end }}">
+      </div>
+      <div>
+        <label for="type">Lead type</label>
+        <select id="type" name="type">
+          <option value="" {% if not category %}selected{% endif %}>All</option>
+          <option value="repair" {% if category == 'repair' %}selected{% endif %}>Repair</option>
+          <option value="cleaning" {% if category == 'cleaning' %}selected{% endif %}>Cleaning</option>
+        </select>
+      </div>
+      <div>
+        <label for="purchaser">Purchaser</label>
+        <input id="purchaser" name="purchaser" type="search" value="{{ purchaser }}" placeholder="Business, name, or email">
+      </div>
+      <button type="submit">Apply</button>
+    </form>
+    <div class="stats">
+      <div class="stat"><span>Leads sold</span><strong>{{ report.lead_count }}</strong></div>
+      <div class="stat"><span>Invoices</span><strong>{{ report.order_count }}</strong></div>
+      <div class="stat"><span>Revenue ex GST</span><strong>{{ report.revenue_label }}</strong></div>
+      <div class="stat"><span>Average lead</span><strong>{{ report.average_label }}</strong></div>
+      <div class="stat"><span>Repair leads</span><strong>{{ report.repair_count }}</strong></div>
+      <div class="stat"><span>Cleaning leads</span><strong>{{ report.cleaning_count }}</strong></div>
+      <div class="stat"><span>Not emailed</span><strong>{{ report.unsent }}</strong></div>
+    </div>
+    <p class="note">These totals are exclusive of GST. Each invoice adds GST at 10 percent. {% if report.pending_count == 1 %}1 checkout was started and was not paid.{% else %}{{ report.pending_count }} checkouts were started and were not paid.{% endif %} Those are excluded from these totals.</p>
+    <h2>Invoices</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice</th>
+          <th>Issued</th>
+          <th>Purchaser</th>
+          <th>Leads</th>
+          <th>Amount</th>
+          <th>Re-issue</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invoice in report.invoices %}
+          <tr>
+            <td>
+              <a href="{{ url_for('admin_invoice', order_id=invoice.order_id) }}">{{ invoice.invoice_number }}</a>
+              <div class="note"><a href="{{ url_for('admin_invoice_pdf', order_id=invoice.order_id) }}">Download PDF</a></div>
+            </td>
+            <td>{{ invoice.issued_label }}</td>
+            <td>
+              {{ invoice.purchaser }}
+              {% if invoice.contact and invoice.contact != invoice.purchaser %}<div class="note">{{ invoice.contact }}</div>{% endif %}
+              <div class="note">{{ invoice.email }}</div>
+              <div class="note">{% if invoice.emailed %}Emailed{% else %}Not emailed{% endif %}</div>
+            </td>
+            <td>
+              {{ invoice.lead_count }}
+              <div class="note">{{ invoice.repair_count }} repair, {{ invoice.cleaning_count }} cleaning</div>
+              {% for line in invoice.lines %}
+                <div class="note">{{ line.suburb }}{% if line.postcode %} {{ line.postcode }}{% endif %} · {{ line.category_label }} · {{ line.price_label }}</div>
+              {% endfor %}
+            </td>
+            <td>{{ invoice.amount_label }}</td>
+            <td>
+              <form class="resend" method="post" action="{{ url_for('admin_reissue') }}">
+                <input type="hidden" name="order_id" value="{{ invoice.order_id }}">
+                <input type="hidden" name="from" value="{{ start }}">
+                <input type="hidden" name="to" value="{{ end }}">
+                <input type="hidden" name="type" value="{{ category }}">
+                <input type="hidden" name="purchaser" value="{{ purchaser }}">
+                <input name="email" type="email" value="{{ invoice.email }}" aria-label="Email for {{ invoice.invoice_number }}">
+                <button type="submit">Re-issue</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6">No paid invoices match this selection.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
+  {% include "_footer.html" %}
+</body>
+</html>

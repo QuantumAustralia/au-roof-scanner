@@ -23,6 +23,7 @@ if str(ROOT) not in sys.path:
 from flask import Flask, abort, jsonify, render_template, request, send_file
 from PIL import Image
 
+from scanner.access import require_password
 from scanner.addresses import safe_lead_id
 from scanner.config import ANNOTATED_DIR, DATA_DIR, TILES_DIR
 from scanner.verification import REPORT_CSV, REPORT_FIELDS
@@ -32,7 +33,26 @@ STATUSES = ("pending_review", "approved", "rejected")
 HOST = os.environ.get("APP_HOST") or "0.0.0.0"
 PORT = int(os.environ.get("APP_PORT") or "8080")
 
+class _ForwardedPrefix:
+    """Honour /review when nginx serves this app under that path."""
+
+    def __init__(self, wsgi):
+        self.wsgi = wsgi
+
+    def __call__(self, environ, start_response):
+        prefix = environ.get("HTTP_X_FORWARDED_PREFIX", "")
+        if prefix:
+            environ["SCRIPT_NAME"] = prefix.rstrip("/")
+        return self.wsgi(environ, start_response)
+
+
 app = Flask(__name__, template_folder=str(Path(__file__).parent / "templates"))
+app.wsgi_app = _ForwardedPrefix(app.wsgi_app)
+
+
+@app.before_request
+def _review_password():
+    return require_password()
 
 
 def _read_rows() -> list[dict[str, str]]:

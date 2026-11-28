@@ -3,60 +3,79 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Checkout</title>
+  <title>Checkout · QMS Roof Scan</title>
   <style>
-    :root { color-scheme: light; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; --warn: #8a3b12; }
+    :root { color-scheme: light; --navy: #1b2838; --ink: #1c2430; --muted: #5c6b7a; --line: #e3e8ee; --paper: #fff; --page: #f3f5f8; --blue: #1f4e79; --warn: #8a3b12; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
-    header { padding: 16px 20px; background: var(--paper); border-bottom: 1px solid var(--line); }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; font-family: "Segoe UI", sans-serif; color: var(--ink); background: var(--page); }
+    header { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 16px 20px; background: #010F34; color: #f7f9fb; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .logo { height: 72px; width: auto; border-radius: 8px; }
     h1 { margin: 0; font-size: 26px; }
-    a { color: var(--blue); }
-    .wrap { padding: 16px 20px 40px; }
-    .disclaimer { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 12px 14px; color: #5c3b12; }
+    header a, a { color: #ffffff; }
+    .wrap a { color: var(--blue); }
+    .wrap { padding: 16px 20px 28px; max-width: 980px; }
+    .address-notice {
+      background: #fff4d6;
+      border: 1px solid #8a5a00;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin: 0 0 8px;
+      color: #3d2a00;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.3;
+    }
+    .totals { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; max-width: 360px; }
+    .totals p { margin: 4px 0; }
+    .totals .payable { font-size: 20px; font-weight: 700; }
+    .disclaimer { background: #fff6e8; border: 1px solid #e6c48a; border-radius: 8px; padding: 8px 10px; margin: 18px 0 0; color: #5c3b12; font-size: 12px; }
+    .consent label { color: var(--ink); font-size: 14px; display: flex; gap: 8px; align-items: flex-start; }
+    .consent input { width: auto; margin-top: 3px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin: 16px 0; }
     article { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-    img { width: 100%; height: 200px; object-fit: cover; background: #d9e1ea; display: block; }
+    article img { width: 100%; height: 200px; object-fit: cover; background: #d9e1ea; display: block; cursor: zoom-in; }
+    #roof-view { border: 0; padding: 12px; background: #010F34; }
+    #roof-view img { width: auto; height: auto; max-width: 92vw; max-height: 86vh; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+    #roof-view button { margin: 0 0 8px auto; display: block; }
     .body { padding: 12px; }
     .suburb { font-size: 22px; font-weight: 700; margin: 0 0 6px; }
-    form.pay { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    form.pay { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
     label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
-    input[type="email"] { font: inherit; padding: 8px 10px; border: 1px solid #c5ced6; border-radius: 6px; width: 280px; }
+    input, select { font: inherit; padding: 8px 10px; border: 1px solid #c5ced6; border-radius: 6px; width: 100%; }
     button { font: inherit; background: var(--blue); color: white; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
     button.secondary { background: #e8eef4; color: var(--ink); }
     button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .span-2 { grid-column: 1 / -1; }
     .short { color: var(--warn); font-weight: 650; }
     .total { font-size: 20px; }
+    .attribution { margin-top: auto; padding: 8px 16px; background: #010F34; color: #d5dee8; font-size: 11px; line-height: 1.4; text-align: center; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Checkout</h1>
+    <div class="brand"><img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan"><h1>QMS Roof Scan</h1></div>
     <a href="{{ url_for('marketplace_cart') }}">Back to the cart</a>
   </header>
   <div class="wrap">
+    <p class="address-notice">Street addresses are not shown on this page. They are forwarded with the invoice after payment is received.</p>
     {% with messages = get_flashed_messages() %}
       {% for message in messages %}
         <p class="short">{{ message }}</p>
       {% endfor %}
     {% endwith %}
-    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
     {% if shortfall %}
       <p class="short">Minimum order is {{ minimum_order }} leads.</p>
     {% endif %}
     <div class="grid">
       {% for card in cards %}
         <article>
-          <img src="{{ url_for('roof_image', lead_id=card.lead_id) }}" alt="Satellite view of a roof in {{ card.suburb }}">
+          <img class="roof" src="{{ url_for('roof_image', lead_id=card.lead_id) }}" alt="Satellite view of a roof in {{ card.suburb }}" draggable="false">
           <div class="body">
-            <h2 class="suburb">{{ card.suburb }}</h2>
+            <h2 class="suburb">{{ card.suburb }}{% if card.postcode %} {{ card.postcode }}{% endif %}</h2>
             <p>{{ card.price_label }}</p>
             <p>{{ card.category_label }} · Wear {{ card.wear_score }}</p>
-            <form method="get" action="{{ url_for('marketplace_checkout') }}">
-              {% for other in cards if other.lead_id != card.lead_id %}
-                <input type="hidden" name="lead_id" value="{{ other.lead_id }}">
-              {% endfor %}
-              <button class="secondary" type="submit">Remove</button>
-            </form>
+            <button class="secondary" type="button" data-remove="{{ card.lead_id }}">Remove</button>
           </div>
         </article>
       {% else %}
@@ -64,23 +83,132 @@
       {% endfor %}
     </div>
     {% if cards %}
-      <p class="total">Total {{ total_label }}. GST is not included.</p>
+      <div class="totals">
+        <p>Total ex GST {{ gst.ex_gst_label }}</p>
+        <p>GST (10%) {{ gst.gst_label }}</p>
+        <p class="payable">Invoice total {{ gst.total_label }}</p>
+      </div>
       <form class="pay" method="post" action="{{ url_for('marketplace_checkout') }}">
         {% for card in cards %}
           <input type="hidden" name="lead_id" value="{{ card.lead_id }}">
         {% endfor %}
         <div>
-          <label for="email">Email for the lead details</label>
-          <input id="email" name="email" type="email" required placeholder="name@example.com">
+          <label for="buyer-name">Full name</label>
+          <input id="buyer-name" name="buyer_name" required autocomplete="name">
         </div>
-        <button type="submit" {% if shortfall %}disabled{% endif %}>
-          {% if stripe_ready %}Pay {{ total_label }}{% else %}Test payment {{ total_label }}{% endif %}
-        </button>
+        <div>
+          <label for="business-name">Business name</label>
+          <input id="business-name" name="business_name" required autocomplete="organization">
+        </div>
+        <div>
+          <label for="phone">Phone</label>
+          <input id="phone" name="phone" type="tel" required autocomplete="tel">
+        </div>
+        <div>
+          <label for="email">Email for the invoice and lead addresses</label>
+          <input id="email" name="email" type="email" required autocomplete="email">
+        </div>
+        <div class="span-2">
+          <label for="billing-line">Billing street address</label>
+          <input id="billing-line" name="billing_line" required autocomplete="address-line1">
+        </div>
+        <div>
+          <label for="billing-suburb">Suburb</label>
+          <input id="billing-suburb" name="billing_suburb" required autocomplete="address-level2">
+        </div>
+        <div>
+          <label for="billing-state">State</label>
+          <select id="billing-state" name="billing_state" required autocomplete="address-level1">
+            <option value="NSW" selected>NSW</option>
+            <option>VIC</option>
+            <option>QLD</option>
+            <option>SA</option>
+            <option>WA</option>
+            <option>TAS</option>
+            <option>NT</option>
+            <option>ACT</option>
+          </select>
+        </div>
+        <div>
+          <label for="billing-postcode">Postcode</label>
+          <input id="billing-postcode" name="billing_postcode" inputmode="numeric" required autocomplete="postal-code">
+        </div>
+        <div class="span-2 consent">
+          <label>
+            <input type="checkbox" id="terms-accepted" name="terms_accepted" value="yes">
+            I agree to the <a href="/terms">Terms of Use</a>, <a href="/privacy">Privacy Policy</a>, and <a href="/data-terms">Data Use &amp; Compliance Notice</a> (including single-business use, no resale, and APP 7 direct-marketing opt-out compliance).
+          </label>
+        </div>
+        <div class="span-2">
+          <button type="submit" id="pay-button" disabled>Proceed to Checkout</button>
+        </div>
       </form>
-      {% if not stripe_ready %}
-        <p>Stripe is not configured, so this button records a local test payment and sends the lead email when mail is set up.</p>
+      {% if stripe_ready %}
+        <p>Card payment is taken by Stripe for the invoice total, including GST. The invoice, a CSV of the street addresses, and a roof image for each address are emailed after payment.</p>
+      {% else %}
+        <p>Stripe is not configured on this server, so this button records a local test payment.</p>
       {% endif %}
     {% endif %}
+    <dialog id="roof-view">
+      <button type="button" id="roof-view-close">Close</button>
+      <img id="roof-view-image" alt="" draggable="false">
+    </dialog>
+    <p class="disclaimer">There are no warranties or guarantees as to the accuracy of the images or the condition of the roofs. Images are third-party satellite imagery and we cannot guarantee the age, currency, or accuracy of any image. Leads are provided for information purposes only and buyers should conduct their own inspections.</p>
   </div>
+  {% include "_footer.html" %}
+  <script>
+    const storageKey = "au-roof-cart";
+    function readCart() {
+      try { return JSON.parse(localStorage.getItem(storageKey) || "[]"); }
+      catch (error) { return []; }
+    }
+    function writeCart(items) {
+      localStorage.setItem(storageKey, JSON.stringify(items));
+      if (items.length) localStorage.setItem(storageKey + "-at", String(Date.now()));
+      else localStorage.removeItem(storageKey + "-at");
+    }
+    const roofView = document.getElementById("roof-view");
+    const roofImage = document.getElementById("roof-view-image");
+    document.querySelectorAll("img.roof").forEach((image) => {
+      image.addEventListener("contextmenu", (event) => event.preventDefault());
+      image.addEventListener("dragstart", (event) => event.preventDefault());
+      image.addEventListener("click", () => {
+        roofImage.src = image.src;
+        roofImage.alt = image.alt;
+        if (!roofView.open) roofView.showModal();
+      });
+    });
+    if (roofView) {
+      roofView.addEventListener("contextmenu", (event) => event.preventDefault());
+      document.getElementById("roof-view-close").addEventListener("click", () => roofView.close());
+      roofImage.addEventListener("contextmenu", (event) => event.preventDefault());
+      roofImage.addEventListener("dragstart", (event) => event.preventDefault());
+    }
+    document.querySelectorAll("[data-remove]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = button.getAttribute("data-remove");
+        const previous = readCart();
+        const remaining = [...document.querySelectorAll('input[name="lead_id"]')]
+          .map((field) => field.value)
+          .filter((value) => value !== id);
+        writeCart(remaining.map((leadId) => (
+          previous.find((entry) => entry.id === leadId) || { id: leadId, suburb: "", postcode: "", price: "" }
+        )));
+        const params = new URLSearchParams();
+        remaining.forEach((leadId) => params.append("lead_id", leadId));
+        window.location = "{{ url_for('marketplace_checkout') }}?" + params.toString();
+      });
+    });
+    const kept = readCart();
+    if (kept.length) localStorage.setItem(storageKey + "-at", String(Date.now()));
+    const termsBox = document.getElementById("terms-accepted");
+    const payButton = document.getElementById("pay-button");
+    if (termsBox && payButton) {
+      const shortfall = {{ shortfall|tojson }};
+      termsBox.addEventListener("change", () => {
+        payButton.disabled = shortfall > 0 || !termsBox.checked;
+      });
+    }
+  </script>
 </body>
 </html>

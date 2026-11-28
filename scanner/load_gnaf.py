@@ -11,13 +11,15 @@ from __future__ import annotations
 import argparse
 import csv
 import logging
+import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 if __name__ == "__main__" and __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scanner.addresses import REQUIRED_COLUMNS, safe_lead_id
+from scanner.addresses import REQUIRED_COLUMNS, large_lot_lead_ids, safe_lead_id
 from scanner.config import DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -77,7 +79,7 @@ def load_postcode(postcode: str, output: Path, *, gnaf_dir: Path = GNAF_DIR) -> 
     rows.sort(key=lambda row: (row["suburb"], row["street_address"], row["lead_id"]))
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=REQUIRED_COLUMNS)
+        writer = csv.DictWriter(handle, fieldnames=[*REQUIRED_COLUMNS, "geocode_type"])
         writer.writeheader()
         writer.writerows(rows)
     logger.info("Wrote %s address(es) for %s to %s", len(rows), postcode, output)
@@ -99,16 +101,30 @@ def _rows_for_state(
         return []
     localities = _localities(locality_path)
     streets = _streets(street_path)
-    chosen: dict[str, dict[str, str]] = {}
+    candidates: list[dict[str, str]] = []
+    unit_counts: Counter[tuple[str, str, str, str]] = Counter()
     logger.info("Reading %s addresses for postcode %s", state, postcode)
     for record in _pipe_rows(detail_path):
         if record.get("DATE_RETIRED") or record.get("POSTCODE") != postcode:
             continue
+        if not (record.get("NUMBER_FIRST") or "").strip():
+            continue
+        if _has_flat(record):
+            unit_counts[_site_key(record)] += 1
         if (record.get("ALIAS_PRINCIPAL") or "").upper() != "P":
             continue
         if (record.get("PRIMARY_SECONDARY") or "").upper() == "S":
             continue
-        if not (record.get("NUMBER_FIRST") or "").strip():
+        candidates.append(record)
+    chosen: dict[str, dict[str, str]] = {}
+    skipped_reserve = 0
+    skipped_strata = 0
+    for record in candidates:
+        if _reserve_number(record):
+            skipped_reserve += 1
+            continue
+        if _strata_building(record, unit_counts):
+            skipped_strata += 1
             continue
         street = streets.get(record.get("STREET_LOCALITY_PID") or "")
         locality = localities.get(record.get("LOCALITY_PID") or "")
@@ -123,20 +139,109 @@ def _rows_for_state(
             "postcode": postcode,
             "lat": "",
             "lon": "",
+            "geocode_type": "",
             "roof_area_m2": str(PLACEHOLDER_ROOF_AREA_M2),
         }
     if not chosen:
         return []
-    for record in _pipe_rows(geocode_path):
+    # Building and property centroids sit on the house. A street-locality point
+    # often sits in the road or on a roundabout, so it is kept only when nothing
+    # better was published for that address.
+    for record in _geocode_records(standard, state):
         if record.get("DATE_RETIRED"):
             continue
-        lead_id = (record.get("ADDRESS_DETAIL_PID") or "").strip()
+        lead_id = safe_lead_id((record.get("ADDRESS_DETAIL_PID") or "").strip()) if (record.get("ADDRESS_DETAIL_PID") or "").strip() else ""
         row = chosen.get(lead_id)
-        if row is None or row["lat"]:
+        if row is None:
             continue
-        row["lat"] = (record.get("LATITUDE") or "").strip()
-        row["lon"] = (record.get("LONGITUDE") or "").strip()
-    return [row for row in chosen.values() if row["lat"] and row["lon"]]
+        lat = (record.get("LATITUDE") or "").strip()
+        lon = (record.get("LONGITUDE") or "").strip()
+        kind = (record.get("GEOCODE_TYPE_CODE") or "").strip().upper()
+        if not lat or not lon:
+            continue
+        if not row["lat"] or _geocode_rank(kind) < _geocode_rank(row["geocode_type"]):
+            row["lat"] = lat
+            row["lon"] = lon
+            row["geocode_type"] = kind
+    rows = [row for row in chosen.values() if row["lat"] and row["lon"]]
+    points: list[tuple[str, float, float]] = []
+    for row in rows:
+        try:
+            points.append((row["lead_id"], float(row["lat"]), float(row["lon"])))
+        except ValueError:
+            continue
+    isolated = large_lot_lead_ids(points)
+    kept = [row for row in rows if row["lead_id"] not in isolated]
+    logger.info(
+        "Postcode %s %s: kept %s, skipped %s reserve numbers, %s strata buildings, %s large lots",
+        postcode,
+        state,
+        len(kept),
+        skipped_reserve,
+        skipped_strata,
+        len(rows) - len(kept),
+    )
+    return kept
+
+
+_STRATA_NAME = re.compile(r"(?i)\bSP\s*\d+\b|\bstrata\b")
+_STRATA_PARCEL = re.compile(r"(?i)(?:^|/)SP\s*\d+\b")
+
+
+def _has_flat(record: dict[str, str]) -> bool:
+    return bool((record.get("FLAT_NUMBER") or "").strip() or (record.get("FLAT_TYPE_CODE") or "").strip())
+
+
+def _site_key(record: dict[str, str]) -> tuple[str, str, str, str]:
+    return (
+        record.get("STREET_LOCALITY_PID") or "",
+        (record.get("NUMBER_FIRST") or "").strip(),
+        (record.get("NUMBER_LAST") or "").strip(),
+        (record.get("NUMBER_FIRST_SUFFIX") or "").strip().upper(),
+    )
+
+
+def _reserve_number(record: dict[str, str]) -> bool:
+    """G-NAF number suffix R marks a council reserve, such as 5R or 110R."""
+    for column in ("NUMBER_FIRST_SUFFIX", "NUMBER_LAST_SUFFIX"):
+        if (record.get(column) or "").strip().upper() == "R":
+            return True
+    return False
+
+
+def _strata_building(record: dict[str, str], unit_counts: Counter[tuple[str, str, str, str]]) -> bool:
+    """The building address of a strata plan, with no unit number of its own."""
+    if _has_flat(record):
+        return False
+    name = record.get("BUILDING_NAME") or ""
+    parcel = record.get("LEGAL_PARCEL_ID") or ""
+    if _STRATA_NAME.search(name) or _STRATA_PARCEL.search(parcel):
+        return True
+    return unit_counts.get(_site_key(record), 0) >= 2
+
+
+# Lower is better. Street-locality points are last.
+_GEOCODE_RANK = {"BCM": 0, "BC": 1, "PCM": 2, "PC": 3, "FCS": 4, "GAP": 8, "STL": 9}
+
+
+def _geocode_rank(kind: str) -> int:
+    return _GEOCODE_RANK.get((kind or "").upper(), 5)
+
+
+def _geocode_records(standard: Path, state: str):
+    """Every published geocode for the state. The default file is the fallback."""
+    names = (
+        f"{state}_ADDRESS_GEOCODE_psv.psv",
+        f"{state}_ADDRESS_SITE_GEOCODE_psv.psv",
+        f"{state}_ADDRESS_DEFAULT_GEOCODE_psv.psv",
+    )
+    seen: set[Path] = set()
+    for name in names:
+        path = standard / name
+        if not path.is_file() or path in seen:
+            continue
+        seen.add(path)
+        yield from _pipe_rows(path)
 
 
 # Words the dashboard uses to recognise an apartment or multi-unit address.

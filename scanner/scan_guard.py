@@ -18,7 +18,7 @@ from scanner.config import DATA_DIR, ROOT
 
 SCAN_CONFIG_PATH = ROOT / "scan_config.json"
 HISTORY_PATH = DATA_DIR / "scan_history.json"
-DEFAULT_LOCKOUT_MONTHS = 6
+DEFAULT_LOCKOUT_MONTHS = 12
 
 
 @dataclass(frozen=True)

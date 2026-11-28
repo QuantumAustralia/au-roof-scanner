@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Review roof leads</title>
+  <title>QMS Roof Scan</title>
   <style>
     :root {
       color-scheme: light;
@@ -27,11 +27,15 @@
       gap: 16px;
       align-items: center;
       padding: 16px 20px;
-      background: var(--paper);
-      border-bottom: 1px solid var(--line);
+      background: #010F34;
+      color: #f7f9fb;
+      border-bottom: 0;
     }
-    h1 { margin: 0; font-size: 22px; font-weight: 650; }
-    p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    .brand { display: flex; gap: 12px; align-items: center; }
+    .logo { height: 88px; width: auto; border-radius: 8px; }
+    h1 { margin: 0; font-size: 22px; font-weight: 650; color: #f7f9fb; }
+    header p { margin: 4px 0 0; color: #c5d0dc; font-size: 14px; }
+    header a { color: #ffffff; }
     button, select {
       font: inherit;
       border-radius: 6px;
@@ -104,9 +108,12 @@
 </head>
 <body>
   <header>
-    <div>
-      <h1>Review roof leads</h1>
-      <p id="summary">{{ rows|length }} leads, {{ approved_count }} approved</p>
+    <div class="brand">
+      <img class="logo" src="{{ url_for('static', filename='qms-roof-scan.jpg') }}" alt="QMS Roof Scan">
+      <div>
+        <h1>QMS Roof Scan</h1>
+        <p id="summary">{{ rows|length }} leads, {{ approved_count }} approved</p>
+      </div>
     </div>
     <form method="post" action="{{ url_for('download_approved') }}">
       <button type="submit">Download approved leads</button>
@@ -200,5 +207,18 @@
       });
     });
   </script>
+  <style>
+    .site-footer { margin-top: 24px; padding: 10px 16px; background: #010F34; color: #d5dee8; font-size: 11px; line-height: 1.45; text-align: center; }
+    .site-footer a { color: #ffffff; }
+    .site-footer nav { display: flex; gap: 14px; justify-content: center; margin-top: 6px; }
+  </style>
+  <footer class="site-footer">
+    <p>Aerial Imagery Attribution: Aerial roof imagery sourced from <a href="https://www.spatial.nsw.gov.au/">Spatial Services, NSW Department of Customer Service</a> (© State of New South Wales), modified with automated condition overlays and licensed under <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 (CC BY 4.0)</a>.</p>
+    <nav>
+      <a href="/privacy">Privacy</a>
+      <a href="/terms">Terms</a>
+      <a href="/data-terms">Data use</a>
+    </nav>
+  </footer>
 </body>
 </html>

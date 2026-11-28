@@ -16,9 +16,12 @@ YELLOW = (255, 214, 0)
 STROKE = 8  # sized for a tile about 1000px wide
 MIN_SPAN = 10  # 1% of the 0–1000 grid; smaller boxes are not drawn
 _LABEL_FONT = (
+    Path(r"C:\Windows\Fonts\arialbd.ttf"),
     Path(r"C:\Windows\Fonts\arial.ttf"),
     Path(r"C:\Windows\Fonts\segoeui.ttf"),
-    Path(r"C:\Windows\Fonts\calibri.ttf"),
+    Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+    Path("/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"),
 )
 # Short labels for the view image. Wear scores are not shown.
 _DEFECT_LABELS = {
@@ -119,9 +122,10 @@ def draw_defect_caption(image: Image.Image, text: str) -> Image.Image:
     padding = max(12, marked.width // 64)
     # Stay left of the centre cross.
     max_width = max(40, marked.width // 2 - padding - 48)
-    font_size = max(18, marked.width // 36)
+    # Large enough to read on the full tile. The old size shrank "Heavy Moss" to a speck.
+    font_size = max(64, marked.width // 14)
     font = _font(font_size)
-    while font_size > 14 and draw.textlength(text, font=font) > max_width:
+    while font_size > 48 and draw.textlength(text, font=font) > max_width:
         font_size -= 2
         font = _font(font_size)
     stroke = max(2, font_size // 14)

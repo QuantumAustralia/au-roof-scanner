@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,12 +46,70 @@ class Address:
     # CSV has no roof_centroid_lat / roof_centroid_lon columns, or the cells are blank.
     roof_centroid_lat: float | None = None
     roof_centroid_lon: float | None = None
+    # G-NAF geocode type, such as BC or STL. Blank on older address files.
+    geocode_type: str = ""
 
     @property
     def single_line(self) -> str:
         return (
             f"{self.street_address}, {self.suburb} {self.state} {self.postcode}"
         )
+
+
+# House numbers such as 5R and 110R are council reserves in G-NAF, not homes.
+_RESERVE_NUMBER = re.compile(r"(?i)(?:^|\s)\d+R(?:\s|$|-)")
+# A neighbour this far away means the lot is rural or very large.
+LARGE_LOT_METRES = 150
+
+
+def is_reserve_number(street: str) -> bool:
+    """True when the house number ends in R, as in 5R or 110R."""
+    return _RESERVE_NUMBER.search(street.strip()) is not None
+
+
+def large_lot_lead_ids(points: list[tuple[str, float, float]], metres: float = LARGE_LOT_METRES) -> set[str]:
+    """Lead ids whose nearest other address is at least `metres` away, or that are alone."""
+    if len(points) < 2:
+        return {lead_id for lead_id, _lat, _lon in points}
+    cell = 0.0012
+    buckets: dict[tuple[int, int], list[int]] = {}
+    for index, (_lead_id, lat, lon) in enumerate(points):
+        buckets.setdefault((int(lat / cell), int(lon / cell)), []).append(index)
+    isolated: set[str] = set()
+    for index, (lead_id, lat, lon) in enumerate(points):
+        nearest = _nearest_metres(index, points, buckets, cell)
+        if nearest is None or nearest >= metres:
+            isolated.add(lead_id)
+    return isolated
+
+
+def _nearest_metres(
+    index: int,
+    points: list[tuple[str, float, float]],
+    buckets: dict[tuple[int, int], list[int]],
+    cell: float,
+) -> float | None:
+    _lead_id, lat, lon = points[index]
+    centre_x = int(lat / cell)
+    centre_y = int(lon / cell)
+    best: float | None = None
+    for dx in range(-2, 3):
+        for dy in range(-2, 3):
+            for other in buckets.get((centre_x + dx, centre_y + dy), ()):
+                if other == index:
+                    continue
+                _other_id, other_lat, other_lon = points[other]
+                distance = _metres_between(lat, lon, other_lat, other_lon)
+                if best is None or distance < best:
+                    best = distance
+    return best
+
+
+def _metres_between(lat: float, lon: float, other_lat: float, other_lon: float) -> float:
+    mid = (lat + other_lat) / 2
+    east = (other_lon - lon) * math.cos(math.radians(mid)) * 111_320
+    north = (other_lat - lat) * 110_540
+    return (east * east + north * north) ** 0.5
 
 
 def safe_lead_id(lead_id: str) -> str:
@@ -159,6 +218,7 @@ def _parse_row(
         roof_area_m2=roof_area,
         roof_centroid_lat=centroid_lat,
         roof_centroid_lon=centroid_lon,
+        geocode_type=cell("geocode_type").upper(),
     )
 
 

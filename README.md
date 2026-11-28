@@ -199,7 +199,7 @@ Open http://127.0.0.1:5000 in a browser on this machine. There is no login.
 
 **Load addresses** reads the local G-NAF extract only. **Start scan** asks you to confirm how many addresses will be scanned. Leave **Scan entire postcode** unticked and enter a number in **Maximum addresses** to scan only the first addresses that are not locked. Tick the box to scan the whole postcode. Addresses already scanned are skipped for the lockout period.
 
-The default lockout is 6 months. Change `lockout_months` in `scan_config.json`, or set `SCAN_LOCKOUT_MONTHS` in `.env`. Dates are kept in `data/scan_history.json`.
+The default lockout is 12 months. Change `lockout_months` in `scan_config.json`, or set `SCAN_LOCKOUT_MONTHS` in `.env`. Dates are kept in `data/scan_history.json`.
 
 The table starts on **Match: Either**, with both thresholds at 3 and **Roof material** on All. Either keeps a lead that meets the repair/wear threshold or the cleaning threshold. Repair / Wear keeps the repair side only. Cleaning keeps the cleaning side only. Roof material lists All, then concrete tile, terracotta tile, colorbond metal, corrugated iron, and other, plus older stored values `metal` and `unclear`. **Reset filters** returns the thresholds, match, material, occupancy, postcode, and Show ALL to those starting values. **Show ALL** ignores the two thresholds and still applies material, postcode, and occupancy.
 
